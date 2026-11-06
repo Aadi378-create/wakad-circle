@@ -2,7 +2,7 @@ const {onCall,HttpsError}=require('firebase-functions/v2/https');
 const {initializeApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {validateProduct,quote,fulfillmentDetails,validateAddress,orderTransition,nextOrderRate,nextProductRevision}=require('./domain.cjs');
-initializeApp();const db=getFirestore(),options={region:'asia-south1',maxInstances:5,invoker:'public',cors:['https://wakad-kissan.web.app','https://wakad-kissan.firebaseapp.com','https://wakad-kissan-kirana.peakedbeam2.chatgpt.site']};
+initializeApp();const db=getFirestore(),options={region:'asia-south1',maxInstances:5,invoker:'public',cors:['https://wakad-circle.web.app','https://wakad-circle.firebaseapp.com','https://wakad-kissan.web.app','https://wakad-kissan.firebaseapp.com','https://wakad-kissan-kirana.peakedbeam2.chatgpt.site']};
 function signedIn(request){if(!request.auth||!request.auth.token.phone_number)throw new HttpsError('unauthenticated','Sign in with your phone number first.');}
 function owner(request){signedIn(request);if(request.auth.token.shopkeeper!==true)throw new HttpsError('permission-denied','Only the shopkeeper can make this change.');}
 function validate(fn){try{return fn()}catch(e){throw new HttpsError('invalid-argument',e.message)}}

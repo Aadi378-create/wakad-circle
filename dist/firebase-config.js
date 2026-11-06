@@ -1,7 +1,7 @@
 // Firebase web configuration is public. Never put service-account credentials here.
 window.WK_FIREBASE_PROJECT = {
   apiKey:'AIzaSyB9cAaEBK3-Rq6vj-Y64xPcSP0jAcSNspk',
-  authDomain:'wakad-kissan.firebaseapp.com',
+  authDomain:'wakad-circle.firebaseapp.com',
   projectId:'wakad-kissan',
   storageBucket:'wakad-kissan.firebasestorage.app',
   messagingSenderId:'114726270849',

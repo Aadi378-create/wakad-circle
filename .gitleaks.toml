@@ -1,4 +1,4 @@
-title = "Wakad Kissan repository secret scan"
+title = "Wakad Circle repository secret scan"
 [extend]
 useDefault = true
 [[allowlists]]

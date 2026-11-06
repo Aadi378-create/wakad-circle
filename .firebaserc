@@ -1,1 +1,6 @@
-{"projects":{"default":"wakad-kissan"}}
+{
+  "projects": {
+    "default": "wakad-kissan",
+    "wakad-circle": "wakad-kissan"
+  }
+}

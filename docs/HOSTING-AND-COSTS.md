@@ -27,7 +27,7 @@ For a small pilot, provisionally budget **US$0–10/month for hosting/database/f
 
 Example: if 1,000 India OTP messages are spread over 30 days with at least 10 messages on every day, approximately 700 are billable: **700 × US$0.07 = US$49** for SMS. Adding a US$0–10 infrastructure allowance gives approximately **US$49–59/month**, before tax. Resends count as messages. Staying signed in reduces repeated OTP requests. Different daily distribution changes the free allowance.
 
-No custom domain purchase is needed for `wakad-kissan.web.app`; Firebase supplies HTTPS. A branded domain, if later chosen, has a separate registrar price.
+No custom domain purchase is needed for `wakad-circle.web.app`; Firebase supplies HTTPS. A branded domain, if later chosen, has a separate registrar price.
 
 Sources:
 
