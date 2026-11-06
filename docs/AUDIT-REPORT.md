@@ -66,3 +66,11 @@ This section supersedes the original ₹200 shipping policy above. Current deliv
 ## Brand migration verification
 
 Canonical Hosting site and repository renamed to Wakad Circle. The existing cloud data project was retained; only mutable display names, hosting origin, auth domain, permitted origins, package names, docs and service-worker branding changed. The old public origin redirects to the new origin, including the shopkeeper path. Auth domains were added without changing the approved shopkeeper claim or existing data rules. Phone sign-in on the new domain requires user acceptance testing; no OTP or customer data was manufactured to claim this test. Reinstalling the PWA from the new origin is required for a clean installed-app migration.
+
+## Direct UPI audit update
+
+29 automated tests passed, adding exact-amount INR URI construction, invalid amount/reference rejection, unverified customer claims, cross-account order protection, receipt reference reuse prevention, exact bank amount confirmation, idempotent receipt recording, and late-payment/refund state checks. Existing phone/admin guards cover both new callables. Private payment receipt records use the default-deny Firestore rules.
+
+The customer's uploaded QR was decoded locally and matched the provided VPA. A newly generated ₹249.50 QR was independently decoded with OpenCV and exactly matched the constructed UPI URI. Browser demo checks covered checkout → store acceptance → payment reference submission → pending bank check → merchant confirmation → customer paid label, and custom amount entry. Demo payment links are disabled; no real transfer was made or asserted. Real phone UPI-app handling, beneficiary display name and Axis merchant-account terms require owner acceptance testing.
+
+The amount is pre-filled, not cryptographically locked by a bank. Full order amount verification is required server-side when recording receipt. Refund records require an external refund first; no automated money movement occurs. The local QR generator is vendored from the pinned npm package, with integrity and MIT notice in THIRD-PARTY.md; it sends no QR payload to a third-party QR service. Production dependency audit reports zero known vulnerabilities. Secret scan results are under outputs/. This does not make the app an independently certified payment gateway.

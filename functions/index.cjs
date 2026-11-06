@@ -2,6 +2,7 @@ const {onCall,HttpsError}=require('firebase-functions/v2/https');
 const {initializeApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {validateProduct,quote,fulfillmentDetails,validateAddress,orderTransition,nextOrderRate,nextProductRevision}=require('./domain.cjs');
+const payment=require('./payments.cjs'),{randomBytes}=require('node:crypto');
 initializeApp();const db=getFirestore(),options={region:'asia-south1',maxInstances:5,invoker:'public',cors:['https://wakad-circle.web.app','https://wakad-circle.firebaseapp.com','https://wakad-kissan.web.app','https://wakad-kissan.firebaseapp.com','https://wakad-kissan-kirana.peakedbeam2.chatgpt.site']};
 function signedIn(request){if(!request.auth||!request.auth.token.phone_number)throw new HttpsError('unauthenticated','Sign in with your phone number first.');}
 function owner(request){signedIn(request);if(request.auth.token.shopkeeper!==true)throw new HttpsError('permission-denied','Only the shopkeeper can make this change.');}
@@ -21,7 +22,8 @@ exports.placeOrder=onCall(options,async request=>{
     const docs=await tx.getAll(...refs);const catalog=new Map(docs.filter(d=>d.exists).map(d=>[d.data().id,d.data()]));
     const bill=validate(()=>quote(lines,catalog,details.fulfillment));
     bill.items.forEach(i=>tx.update(db.collection('products').doc(String(i.id)),{stock:catalog.get(i.id).stock-i.qty,revision:(catalog.get(i.id).revision||0)+1}));
-    const order={...details,...bill,uid:request.auth.uid,phone:request.auth.token.phone_number,status:'Pending confirmation',stockReleased:false,date:new Date().toISOString(),createdAt:FieldValue.serverTimestamp(),paymentMethod:details.fulfillment==='pickup'?'Pay at pickup':'Cash on delivery'};
+    const paymentDetails=validate(()=>payment.choice(request.data,bill.total));
+    const order={...details,...bill,...paymentDetails,paymentRef:'WC'+randomBytes(8).toString('hex'),uid:request.auth.uid,phone:request.auth.token.phone_number,status:'Pending confirmation',stockReleased:false,date:new Date().toISOString(),createdAt:FieldValue.serverTimestamp()};
     tx.set(rateRef,rate);
     tx.set(orderRef,order);return {id:orderRef.id,total:order.total,status:order.status};
   });
@@ -39,7 +41,7 @@ exports.setOrderStatus=onCall(options,async request=>{
       const docs=items.length?await tx.getAll(...items.map(i=>db.collection('products').doc(String(i.id)))):[];
       docs.forEach((doc,index)=>{if(doc.exists)tx.update(doc.ref,{stock:doc.data().stock+items[index].qty,revision:(doc.data().revision||0)+1})});
     }
-    tx.update(ref,{status,updatedAt:FieldValue.serverTimestamp(),...(status==='Rejected'?{stockReleased:true,rejectionReason:reason.trim()||'The store could not fulfil this order.'}:{})});
+    tx.update(ref,{status,updatedAt:FieldValue.serverTimestamp(),...(status==='Rejected'?{...(order.paymentStatus==='Paid'?{paymentStatus:'Refund required'}:{}),stockReleased:true,rejectionReason:reason.trim()||'The store could not fulfil this order.'}:{})});
     return {ok:true,status};
   });
 });
@@ -48,3 +50,14 @@ exports.saveAddress=onCall(options,async request=>{
   await db.runTransaction(async tx=>{const snap=await tx.get(collection);if(snap.size>=10&&!snap.docs.some(d=>d.id===address.id))throw new HttpsError('resource-exhausted','You can save up to 10 addresses.');tx.set(collection.doc(address.id),{...address,updatedAt:FieldValue.serverTimestamp()})});return {ok:true};
 });
 exports.deleteAddress=onCall(options,async request=>{signedIn(request);const id=request.data?.id;if(typeof id!=='string'||!/^[a-zA-Z0-9-]{1,80}$/.test(id))throw new HttpsError('invalid-argument','Invalid address.');await db.collection('users').doc(request.auth.uid).collection('addresses').doc(id).delete();return {ok:true};});
+
+function orderId(data){const id=data?.id;if(typeof id!=='string'||!id||id.length>250||id.includes('/'))throw new HttpsError('invalid-argument','Invalid order.');return id}
+exports.submitPaymentReference=onCall(options,async request=>{
+ signedIn(request);const id=orderId(request.data),utr=validate(()=>payment.reference(request.data?.reference));
+ return db.runTransaction(async tx=>{const ref=db.collection('orders').doc(id),snap=await tx.get(ref);if(!snap.exists)throw new HttpsError('not-found','Order not found.');const order=snap.data();if(order.uid!==request.auth.uid)throw new HttpsError('permission-denied','This is not your order.');let update;try{update=payment.submission(order,utr)}catch(e){throw new HttpsError('failed-precondition',e.message)}if(update)tx.update(ref,{...update,paymentSubmittedAt:FieldValue.serverTimestamp()});return {ok:true}});
+});
+exports.managePayment=onCall(options,async request=>{
+ owner(request);const id=orderId(request.data),{action,reference:utr,amount}=request.data;
+ if(!['confirm','refund','not-received'].includes(action)||request.data.checkedBank!==true)throw new HttpsError('invalid-argument','Check the bank receipt before recording this action.');
+ return db.runTransaction(async tx=>{const ref=db.collection('orders').doc(id),snap=await tx.get(ref);if(!snap.exists)throw new HttpsError('not-found','Order not found.');let update;try{update=payment.management(snap.data(),action,utr,amount)}catch(e){throw new HttpsError('failed-precondition',e.message)}if(!update)return {ok:true};if(action!=='not-received'){const receipt=db.collection('paymentReceipts').doc((action==='refund'?'refund-':'paid-')+utr),existing=await tx.get(receipt);if(existing.exists&&existing.data().orderId!==id)throw new HttpsError('already-exists','This bank reference is already recorded against another order.');tx.set(receipt,{orderId:id,type:action,amount:snap.data().total,recordedBy:request.auth.uid,recordedAt:FieldValue.serverTimestamp()})}tx.update(ref,{...update,paymentReviewedBy:request.auth.uid,paymentReviewedAt:FieldValue.serverTimestamp()});return {ok:true}});
+});

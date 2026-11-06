@@ -23,6 +23,8 @@ if (config) {
       saveProduct: product=>call('saveProduct',product),
       placeOrder: payload=>call('placeOrder',payload),
       setStatus: (id,status,reason='')=>call('setOrderStatus',{id,status,reason}),
+      submitPaymentReference: (id,reference)=>call('submitPaymentReference',{id,reference}),
+      managePayment: data=>call('managePayment',data),
       saveAddress: address=>call('saveAddress',address),
       deleteAddress: id=>call('deleteAddress',{id}),
       seed: products=>call('seedCatalog',{products})
