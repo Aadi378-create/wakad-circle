@@ -1,0 +1,78 @@
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],money=v=>'₹'+Number(v).toLocaleString('en-IN');
+const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const demo=!window.WK_FIREBASE_CONFIG;
+let products=[],orders=[],activeTab='orders',orderFilter='pending',knownOrders=new Set(),soundContext=null,soundEnabled=false;
+const statusOf=s=>({New:'Pending confirmation',Packing:'Preparing',Delivered:'Completed'}[s]||s);
+const isPending=o=>statusOf(o.status)==='Pending confirmation';
+const isActive=o=>!['Completed','Rejected','Pending confirmation'].includes(statusOf(o.status));
+const time=value=>new Date(value).toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit',timeZone:'Asia/Kolkata'});
+const allowed=()=>demo||window.WKCloud?.owner;
+function notify(text){$('#toast').textContent=text;$('#toast').classList.add('show');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),3500)}
+function showModal(html){$('#modal').innerHTML=`<button class="close" style="float:right" aria-label="Close dialog" data-close-dialog>×</button>${html}`;$('#modal').showModal()}
+function setPortalState(){
+  const permitted=allowed();$('#portalgate').hidden=permitted;$('#portalworkspace').hidden=!permitted;
+  $('#portalconnection').textContent=demo?'Demo portal':window.WKCloud?.user?(permitted?'● Live orders':'Account not authorized'):'Phone sign-in required';
+  $('#portallogin').textContent=window.WKCloud?.user?'Sign out':'Sign in';
+  if(!permitted){$('#portalorders').innerHTML='';$('#portalinventory').innerHTML='';$('#orderalert').hidden=true}
+  if(permitted)renderPortal();
+}
+function beep(){if(!soundEnabled||!soundContext)return;for(let i=0;i<2;i++){const osc=soundContext.createOscillator(),gain=soundContext.createGain();osc.connect(gain);gain.connect(soundContext.destination);osc.frequency.value=i?880:660;gain.gain.setValueAtTime(.12,soundContext.currentTime+i*.22);gain.gain.exponentialRampToValueAtTime(.001,soundContext.currentTime+i*.22+.18);osc.start(soundContext.currentTime+i*.22);osc.stop(soundContext.currentTime+i*.22+.2)}}
+$('#soundbutton').onclick=async()=>{if(!soundContext)soundContext=new (window.AudioContext||window.webkitAudioContext)();await soundContext.resume();soundEnabled=!soundEnabled;$('#soundbutton').textContent=soundEnabled?'Sound on ✓':'Enable sound';if(soundEnabled)beep()};
+function alertOrder(order){if(!allowed())return;$('#orderalert').hidden=false;$('#orderalert').innerHTML=`<span class="incoming-icon">♧</span><div><small>NEW NEIGHBOURHOOD ORDER</small><b>${escape(order.name)} · ${money(order.total)}</b><p>${order.fulfillment==='pickup'?'Pickup in '+order.pickupMinutes+' min':'Delivery'} · ${order.items.reduce((n,i)=>n+i.qty,0)} items to review</p></div><button class="primary" id="reviewincoming">Review</button><button class="close" id="dismissincoming" aria-label="Dismiss order alert">×</button>`;$('#reviewincoming').onclick=()=>{orderFilter='pending';showTab('orders');renderPortal();$('#orderalert').hidden=true;document.querySelector('[data-order-id="'+order.id+'"]')?.scrollIntoView({behavior:'smooth',block:'center'})};$('#dismissincoming').onclick=()=>$('#orderalert').hidden=true;beep();}
+function receiveOrders(list){
+  orders=list.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  if(!allowed())return;const incoming=orders.filter(o=>isPending(o)&&!knownOrders.has(o.id));orders.forEach(o=>knownOrders.add(o.id));
+  renderPortal();if(incoming.length)alertOrder(incoming[0]);
+}
+function renderPortal(){
+  if(!allowed())return;const pending=orders.filter(isPending).length,active=orders.filter(isActive).length,pickups=orders.filter(o=>o.fulfillment==='pickup'&&!['Rejected','Completed'].includes(statusOf(o.status))).length;
+  $('#pendingbadge').textContent=pending;document.title=(pending?'('+pending+') ':'')+'Shopkeeper — Wakad Circle';
+  $('#portalstats').innerHTML=[['Waiting for your check',pending,'Review & confirm'],['Being prepared / delivered',active,'Keep things moving'],['Upcoming pickups',pickups,'Have their basket ready'],['Low-stock products',products.filter(p=>p.stock<10).length,'Under 10 units']].map(([title,value,sub])=>`<article><small>${title}</small><b>${value}</b><span>${sub}</span></article>`).join('');
+  renderOrderDesk();if(activeTab==='inventory'&&!document.activeElement?.closest('#portalinventory input'))renderInventory();
+}
+function showTab(tab){activeTab=tab;$('#orderworkspace').hidden=tab!=='orders';$('#inventoryworkspace').hidden=tab!=='inventory';$$('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));renderPortal()}
+$$('[data-tab]').forEach(button=>button.onclick=()=>showTab(button.dataset.tab));
+$$('[data-order-filter]').forEach(button=>button.onclick=()=>{orderFilter=button.dataset.orderFilter;renderOrderDesk()});
+function renderOrderDesk(){
+  $$('[data-order-filter]').forEach(b=>b.classList.toggle('selected',b.dataset.orderFilter===orderFilter));
+  const list=orders.filter(o=>orderFilter==='all'||(orderFilter==='pending'?isPending(o):isActive(o)));
+  $('#portalorders').innerHTML=list.length?list.map(o=>{
+    const status=statusOf(o.status),pickup=o.fulfillment==='pickup';let actions=[];
+    if(status==='Pending confirmation')actions=[['Accepted','✓ Yes, accept order'],['Rejected','Unavailable / reject']];
+    if(status==='Accepted')actions=[['Preparing','Start preparing'],['Rejected','Unable to fulfil']];
+    if(status==='Preparing')actions=[[pickup?'Ready for pickup':'Out for delivery',pickup?'Mark ready for pickup':'Send out for delivery']];
+    if(status==='Ready for pickup')actions=[['Completed','Customer collected']];if(status==='Out for delivery')actions=[['Completed','Mark delivered']];
+    return `<article class="portal-order" data-order-id="${escape(o.id)}"><div class="order-card-heading"><span class="fulfillment-tag ${pickup?'pickup-tag':''}">${pickup?'♧ Store pickup':'⌂ Delivery'}</span><span class="status-badge">${escape(status)}</span></div><h3>${escape(o.name)}</h3><div class="order-contact">${escape(o.phone)} · ${time(o.date)}</div>${pickup?`<div class="arrival-box"><b>Arriving in ${o.pickupMinutes} min after ordering</b><span>Requested pickup: ${time(o.pickupAt)}</span></div>`:`<p class="portal-address">${escape(o.address)} · ${escape(o.pin)}</p>`}<ul class="order-items">${o.items.map(i=>`<li><span>${escape(i.name)}</span><b>× ${i.qty}</b></li>`).join('')}</ul><div class="order-bill"><span>${pickup?'Pay at pickup':'Cash on delivery'}</span><strong>${money(o.total)}</strong></div>${isPending(o)?'<p class="availability-note">Check every item before accepting. Stock is reserved while you review.</p>':''}${o.rejectionReason?`<p class="rejection-note">${escape(o.rejectionReason)}</p>`:''}<div class="order-action-buttons">${actions.map(([next,label])=>`<button class="${next==='Rejected'?'reject-button':'primary'}" data-order-action="${escape(o.id)}" data-next="${next}">${label}</button>`).join('')}</div><small class="order-reference">${escape(o.id)}</small></article>`;
+  }).join(''):'<div class="portal-empty"><span>✓</span><h3>All clear for now.</h3><p>New orders will appear here automatically while the portal is open.</p></div>';
+  $$('[data-order-action]').forEach(button=>button.onclick=()=>{if(button.dataset.next==='Rejected'){showModal('<h2>Let the customer know.</h2><form id="rejectform"><label>Why can’t you fulfil this order?<textarea name="reason" required minlength="3" maxlength="200" placeholder="For example: an item is unavailable"></textarea></label><button class="primary wide">Reject order & release stock</button></form>');$('#rejectform').onsubmit=async event=>{event.preventDefault();const submit=event.target.querySelector('button');submit.disabled=true;if(await updateOrder(button.dataset.orderAction,'Rejected',new FormData(event.target).get('reason')))$('#modal').close();else submit.disabled=false}}else updateOrder(button.dataset.orderAction,button.dataset.next,'',button)});
+}
+async function updateOrder(id,status,reason='',button){
+  if(button)button.disabled=true;try{
+    if(!demo)await window.WKCloud.setStatus(id,status,reason);
+    else{const order=orders.find(o=>o.id===id);if(status==='Rejected'&&!order.stockReleased){order.items.forEach(i=>{const p=products.find(p=>p.id===i.id);if(p)p.stock+=i.qty});order.stockReleased=true;order.rejectionReason=reason}order.status=status;localStorage.setItem('wk-orders',JSON.stringify(orders));localStorage.setItem('wk-products',JSON.stringify(products));renderPortal()}
+    notify(status==='Accepted'?'Order accepted. Customer can see your confirmation.':'Order updated');return true;
+  }catch(err){notify(err.message);return false}finally{if(button)button.disabled=false}
+}
+function renderInventory(){
+  const query=$('#inventorysearch').value.toLowerCase();const list=products.filter(p=>p.name.toLowerCase().includes(query));
+  $('#portalinventory').innerHTML=`<table><thead><tr><th>PRODUCT</th><th>PRICE (₹)</th><th>STOCK</th><th></th></tr></thead><tbody>${list.map(p=>`<tr><td><b>${escape(p.emoji)} ${escape(p.name)}</b><small>${escape(p.unit)}</small></td><td><input id="portal-price-${p.id}" type="number" min="1" step=".01" value="${p.price}" aria-label="Price for ${escape(p.name)}"></td><td><input id="portal-stock-${p.id}" type="number" min="0" step="1" value="${p.stock}" aria-label="Stock for ${escape(p.name)}"></td><td><button class="portal-button" data-save-product="${p.id}">Save</button></td></tr>`).join('')}</tbody></table>`;
+  $$('[data-save-product]').forEach(button=>button.onclick=async()=>{const p=products.find(p=>p.id===Number(button.dataset.saveProduct)),price=Number($('#portal-price-'+p.id).value),stock=Number($('#portal-stock-'+p.id).value);if(price<=0||!Number.isFinite(price)||!Number.isInteger(stock)||stock<0)return notify('Enter a valid price and whole-number stock.');button.disabled=true;try{if(demo){Object.assign(p,{price,mrp:Math.max(price,p.mrp),stock});localStorage.setItem('wk-products',JSON.stringify(products));renderPortal()}else await window.WKCloud.saveProduct({...p,price,mrp:Math.max(price,p.mrp),stock});notify('Saved. Your customer catalog is up to date.')}catch(err){notify(err.message);renderInventory()}finally{button.disabled=false}});
+}
+$('#inventorysearch').oninput=renderInventory;
+$('#portaladdproduct').onclick=()=>{showModal('<h2>Add a product</h2><form id="portalproduct"><label>Name<input name="name" required maxlength="100"></label><label>Pack size<input name="unit" required maxlength="30" placeholder="500 g"></label><label>Category<select name="cat"><option value="0">Vegetables & fruits</option><option value="1">Dairy & breakfast</option><option value="2">Atta, rice & dal</option><option value="3">Snacks</option><option value="4">Beverages</option><option value="5">Home & care</option></select></label><label>Price (₹)<input name="price" required type="number" min="1" step=".01"></label><label>Stock<input name="stock" required type="number" min="0" step="1"></label><button class="primary wide">Add product</button></form>');$('#portalproduct').onsubmit=async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.target)),p={id:Date.now(),name:data.name,unit:data.unit,cat:Number(data.cat),price:Number(data.price),mrp:Number(data.price),stock:Number(data.stock),emoji:'♧'};try{if(demo){products.push(p);localStorage.setItem('wk-products',JSON.stringify(products));renderPortal()}else await window.WKCloud.saveProduct(p);$('#modal').close();notify('Product added')}catch(err){notify(err.message)}}};
+function login(){
+  if(!window.WKCloud)return notify('Connecting to authentication. Please try again.');
+  showModal('<h2>Shopkeeper sign-in</h2><p class="form-note">Use the phone number registered to your shop.</p><form id="portalphone"><label>Mobile number (+91)<input name="phone" required pattern="[6-9][0-9]{9}" maxlength="10" inputmode="tel" placeholder="10-digit mobile number"></label><label class="consent"><input type="checkbox" required> I agree to receive a verification SMS. Google processes this number for authentication and abuse prevention.</label><div id="recaptcha"></div><p id="portalerror" role="alert"></p><button class="primary wide">Send OTP</button></form><form id="portalotp" hidden><label>Verification code<input name="code" required pattern="[0-9]{6}" maxlength="6" inputmode="numeric" autocomplete="one-time-code"></label><button class="primary wide">Verify & open portal</button></form>');
+  $('#portalphone').onsubmit=async event=>{event.preventDefault();const b=event.target.querySelector('button');b.disabled=true;try{await window.WKCloud.sendOTP('+91'+new FormData(event.target).get('phone'));b.textContent='OTP sent';$('#portalotp').hidden=false}catch(err){$('#portalerror').textContent=err.message;b.disabled=false}};
+  $('#portalotp').onsubmit=async event=>{event.preventDefault();const b=event.target.querySelector('button');b.disabled=true;try{await window.WKCloud.verifyOTP(new FormData(event.target).get('code'));$('#modal').close();setPortalState()}catch(err){$('#portalerror').textContent=err.message;b.disabled=false}};
+}
+$('#gatelogin').onclick=login;$('#portallogin').onclick=async()=>{if(window.WKCloud?.user)await window.WKCloud.signOut();else login()};
+window.WK={receiveProducts(ps){products=ps;renderPortal()},receiveOrders,authChanged(){knownOrders=new Set();setPortalState()},cloudReady:setPortalState,cloudError(err){$('#portalconnection').textContent='Connection needs attention';notify(err.message)}};
+if(demo){
+  $('#portallogin').hidden=true;$('#gatelogin').hidden=true;document.querySelectorAll('a[href="/"]').forEach(a=>a.href='/?mode=demo');
+  fetch('catalog.json').then(r=>r.json()).then(catalog=>{products=JSON.parse(localStorage.getItem('wk-products')||'null')||catalog;receiveOrders(JSON.parse(localStorage.getItem('wk-orders')||'[]'));setPortalState()});
+  window.addEventListener('storage',event=>{if(event.key==='wk-orders')receiveOrders(JSON.parse(event.newValue||'[]'));if(event.key==='wk-products'){products=JSON.parse(event.newValue||'[]');renderPortal()}});
+}
+setPortalState();
+
+document.addEventListener('click',event=>{if(event.target.closest('[data-close-dialog]'))document.querySelector('dialog')?.close()});

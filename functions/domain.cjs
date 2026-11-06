@@ -9,7 +9,8 @@ function validateProduct(p){
   if(p.white===true)clean.white=true;
   return clean;
 }
-function quote(lines,catalog){
+function quote(lines,catalog,fulfillment='delivery'){
+  if(!['delivery','pickup'].includes(fulfillment))throw Error('Choose delivery or store pickup.');
   if(!Array.isArray(lines)||!lines.length||lines.length>50)throw Error('Choose between 1 and 50 products.');
   const seen=new Set();let subtotalPaise=0;
   const items=lines.map(line=>{
@@ -17,13 +18,36 @@ function quote(lines,catalog){
     seen.add(line.id);const p=catalog.get(line.id);if(!p||p.stock<line.qty)throw Error((p?.name||'Product')+' has insufficient stock.');
     subtotalPaise+=Math.round(p.price*100)*line.qty;return {id:p.id,name:p.name,price:p.price,qty:line.qty};
   });
-  const deliveryPaise=subtotalPaise>=20000?0:2500;
+  const deliveryPaise=fulfillment==='pickup'||subtotalPaise>=49900?0:2500;
   return {items,subtotal:subtotalPaise/100,deliveryFee:deliveryPaise/100,total:(subtotalPaise+deliveryPaise)/100};
 }
 function deliveryDetails(data){
   if(!data||typeof data!=='object')throw Error('Enter delivery details.');
   if(typeof data.name!=='string'||data.name.trim().length<2||data.name.length>80||typeof data.address!=='string'||data.address.trim().length<10||data.address.length>300||data.pin!=='411057')throw Error('Enter a name and complete address in PIN 411057.');
   return {name:data.name.trim(),address:data.address.trim(),pin:data.pin};
+}
+function fulfillmentDetails(data,now=Date.now()){
+  if(!data||typeof data.name!=='string'||data.name.trim().length<2||data.name.length>80)throw Error('Enter your name.');
+  const fulfillment=data.fulfillment||'delivery';
+  if(fulfillment==='pickup'){
+    if(![15,30,45,60,90,120].includes(data.pickupMinutes))throw Error('Choose when you will arrive: 15 to 120 minutes.');
+    return {name:data.name.trim(),fulfillment,pickupMinutes:data.pickupMinutes,pickupAt:new Date(now+data.pickupMinutes*60000).toISOString()};
+  }
+  if(fulfillment!=='delivery')throw Error('Choose delivery or store pickup.');
+  return {...deliveryDetails(data),fulfillment};
+}
+function validateAddress(data){
+  const details=deliveryDetails(data);
+  if(typeof data.id!=='string'||!/^[a-zA-Z0-9-]{1,80}$/.test(data.id)||typeof data.label!=='string'||!data.label.trim()||data.label.length>30)throw Error('Enter an address label such as Home or Work.');
+  return {...details,id:data.id,label:data.label.trim()};
+}
+function canonicalStatus(status){return {New:'Pending confirmation',Packing:'Preparing',Delivered:'Completed'}[status]||status;}
+function orderTransition(order,next){
+  const current=canonicalStatus(order.status);
+  if(current===next)return {unchanged:true,restore:false};
+  const transitions={'Pending confirmation':['Accepted','Rejected'],Accepted:['Preparing','Rejected'],Preparing:order.fulfillment==='pickup'?['Ready for pickup']:['Out for delivery'],'Ready for pickup':['Completed'],'Out for delivery':['Completed']};
+  if(!transitions[current]?.includes(next))throw Error('This order status changed. Refresh and review the order.');
+  return {unchanged:false,restore:next==='Rejected'&&!order.stockReleased};
 }
 function nextOrderRate(previous,now){
   const current=previous&&now-previous.windowStart<60000?previous:{windowStart:now,count:0};
@@ -34,4 +58,4 @@ function nextProductRevision(current,expected){
   if(!Number.isSafeInteger(expected)||expected<0||expected!==(current?.revision||0))throw Error('Stock or price changed on another device. Refresh and save again.');
   return expected+1;
 }
-module.exports={validateProduct,quote,deliveryDetails,nextOrderRate,nextProductRevision};
+module.exports={validateProduct,quote,deliveryDetails,fulfillmentDetails,validateAddress,canonicalStatus,orderTransition,nextOrderRate,nextProductRevision};

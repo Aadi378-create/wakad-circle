@@ -4,6 +4,7 @@ service cloud.firestore {
     function owner() { return request.auth != null && request.auth.token.get('shopkeeper', false) == true; }
     match /products/{product} { allow read: if true; allow write: if false; }
     match /orders/{order} { allow read: if request.auth != null && (owner() || resource.data.uid == request.auth.uid); allow write: if false; }
+    match /users/{uid}/addresses/{address} { allow read: if request.auth != null && request.auth.uid == uid; allow write: if false; }
     match /{document=**} { allow read, write: if false; }
   }
 }

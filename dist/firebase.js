@@ -8,7 +8,7 @@ if (config) {
     ]);
     const app=appSDK.initializeApp(config), auth=authSDK.getAuth(app), db=dbSDK.getFirestore(app);
     const functions=fnSDK.getFunctions(app,window.WK_FUNCTIONS_REGION||'asia-south1');
-    let verifier, confirmation, stopOrders=()=>{};
+    let verifier, confirmation, stopOrders=()=>{},stopAddresses=()=>{},authGeneration=0;
     const call=(name,data)=>fnSDK.httpsCallable(functions,name)(data).then(r=>r.data);
     window.WKCloud={
       user:null,owner:false,
@@ -22,17 +22,23 @@ if (config) {
       async signOut(){await authSDK.signOut(auth);},
       saveProduct: product=>call('saveProduct',product),
       placeOrder: payload=>call('placeOrder',payload),
-      setStatus: (id,status)=>call('setOrderStatus',{id,status}),
+      setStatus: (id,status,reason='')=>call('setOrderStatus',{id,status,reason}),
+      saveAddress: address=>call('saveAddress',address),
+      deleteAddress: id=>call('deleteAddress',{id}),
       seed: products=>call('seedCatalog',{products})
     };
     dbSDK.onSnapshot(dbSDK.collection(db,'products'),snap=>window.WK.receiveProducts(snap.docs.map(d=>d.data())),err=>window.WK.cloudError(err));
     authSDK.onAuthStateChanged(auth,async user=>{
-      stopOrders();window.WKCloud.user=user;window.WKCloud.owner=false;
-      if(user){const token=await user.getIdTokenResult(true);window.WKCloud.owner=token.claims.shopkeeper===true;}
+      const generation=++authGeneration;stopOrders();stopAddresses();window.WK.receiveOrders([]);window.WK.receiveAddresses?.([]);window.WKCloud.user=user;window.WKCloud.owner=false;
+      let isOwner=false;
+      if(user){try{const token=await user.getIdTokenResult(true);isOwner=token.claims.shopkeeper===true}catch(err){if(generation===authGeneration)window.WK.cloudError(err);return}}
+      if(generation!==authGeneration)return;
+      window.WKCloud.owner=isOwner;
       window.WK.authChanged();
-      if(user){const ref=dbSDK.collection(db,'orders');const q=window.WKCloud.owner?ref:dbSDK.query(ref,dbSDK.where('uid','==',user.uid));
+      if(user){const ref=dbSDK.collection(db,'orders');const q=window.WKCloud.owner?dbSDK.query(ref,dbSDK.orderBy('date','desc'),dbSDK.limit(100)):dbSDK.query(ref,dbSDK.where('uid','==',user.uid),dbSDK.orderBy('date','desc'),dbSDK.limit(100));
         stopOrders=dbSDK.onSnapshot(q,snap=>window.WK.receiveOrders(snap.docs.map(d=>({id:d.id,...d.data()}))),err=>window.WK.cloudError(err));}
-      else window.WK.receiveOrders([]);
+      if(user&&window.WK.receiveAddresses)stopAddresses=dbSDK.onSnapshot(dbSDK.collection(db,'users',user.uid,'addresses'),snap=>window.WK.receiveAddresses(snap.docs.map(d=>d.data())),err=>window.WK.cloudError(err));
+      else if(!user)window.WK.receiveOrders([]);
     });
     window.WK.cloudReady();
   } catch(error){window.WK.cloudError(error);}

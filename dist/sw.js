@@ -1,5 +1,5 @@
-const CACHE='wakad-kissan-shell-v3';
-const SHELL=['./index.html','./style.css?v=3','./app.js','./offers.js','./presentation.js','./firebase.js','./firebase-config.js','./pwa.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
+const CACHE='wakad-kissan-shell-v5';
+const SHELL=['./index.html','./style.css?v=4','./app.js','./offers.js','./commerce.js','./commerce.css?v=4','./presentation.js','./firebase.js','./firebase-config.js','./pwa.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL))));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('wakad-kissan-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('message',event=>{if(event.data==='SKIP_WAITING')self.skipWaiting()});

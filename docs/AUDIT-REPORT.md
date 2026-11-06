@@ -1,4 +1,4 @@
-# Wakad Kissan prototype audit
+# Wakad Circle prototype audit
 
 Date: 6 November 2026. Scope: authored application source, Git history, production dependency lockfile, Firebase rules/functions, public hosting configuration, mobile browser layout, and deployment/access boundaries. This is an engineering prototype audit, not an independent penetration-test certification or a guarantee that no vulnerability exists.
 
@@ -51,3 +51,14 @@ No unresolved critical or high findings were identified in the reviewed scope. T
 7. The local PC has Node 24 while the deployed backend/CI target Node 22. Automated source tests ran locally; cloud deployment provides the Node 22 execution environment. A physical-device acceptance pass and broader concurrency/load test remain separate work.
 
 Evidence files are available locally under `outputs/`; this report is committed with the reviewed source. No system-wide PC security audit or inspection of unrelated personal files was performed.
+
+## Update audit — Wakad Circle (6 November 2026)
+
+This section supersedes the original ₹200 shipping policy above. Current delivery is ₹25 below ₹499 and free at ₹499; pickup is always free with no minimum. The separate shopkeeper portal, private multi-address book and pickup ETA flow were reviewed.
+
+- 22 automated tests cover the original security boundaries plus delivery boundaries, pickup validation and server pricing, private address ownership, address count limit, order state transitions, stock restoration exactly once, and idempotent pickup checkout. The browser policy regression test checks strict script restrictions and absence of inline event handlers.
+- Browser demo verification: save Home and Work; choose Home; ₹223 basket has ₹25 delivery; switch to free pickup, choose 45 minutes, submit; separate portal receives a popup; accept, prepare and mark ready; customer view updates across tabs. A phone-width portal layout was inspected. These are browser/demo checks, not a real phone purchase.
+- Live smoke: shared catalog works, anonymous reads of orders and addresses return 403, all six callable endpoints reject anonymous requests. Server-side function tests use transaction mocks and do not replace a real authenticated acceptance order.
+- Added CSP allowing only required origins, blocking inline scripts/event handlers and embedding; removed inline click attributes and escaped product emoji rendering. Added HSTS and explicit callable-origin allowlist. Firebase manages hosting infrastructure; no separate WAF/Cloud Armor or PC antivirus was installed.
+- Dependency audit reports zero known production dependency vulnerabilities. Secret scanner results are recorded locally in `outputs/`. This is not a guarantee against future vulnerabilities or a whole-PC malware audit.
+- Remaining: exact pickup street address, physical-device acceptance, real authenticated address/checkout/status pass, App Check registration/metrics/enforcement rollout, budget alerts and independent penetration testing. New-order alerts require the portal to remain open; optional sound requires a user click. No Play Store registration is planned.

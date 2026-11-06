@@ -10,7 +10,7 @@
     "firebase-functions": "7.4.0"
   },
   "scripts": {
-    "test": "node --test domain.test.cjs auth.test.cjs"
+    "test": "node --test domain.test.cjs auth.test.cjs workflow.test.cjs"
   },
   "overrides": {
     "rimraf": "6.1.4"

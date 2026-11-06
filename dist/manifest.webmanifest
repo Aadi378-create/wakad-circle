@@ -1,18 +1,36 @@
 {
-  "id":"/",
-  "name":"Wakad Kissan",
-  "short_name":"Wakad Kissan",
-  "description":"Your neighbourhood kirana: shop groceries, track orders, and manage your catalog.",
-  "start_url":"/?mode=live",
-  "scope":"/",
-  "display":"standalone",
-  "background_color":"#f8f8f2",
-  "theme_color":"#126443",
-  "lang":"en-IN",
-  "categories":["shopping","food"],
-  "icons":[
-    {"src":"/icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
-    {"src":"/icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
-    {"src":"/icons/maskable-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+  "id": "/",
+  "name": "Wakad Circle",
+  "short_name": "Wakad Circle",
+  "description": "Your neighbourhood kirana: delivery, store pickup, saved addresses and live order updates.",
+  "start_url": "/?mode=live",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8f8f2",
+  "theme_color": "#126443",
+  "lang": "en-IN",
+  "categories": [
+    "shopping",
+    "food"
+  ],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }
