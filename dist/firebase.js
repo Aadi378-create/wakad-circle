@@ -31,14 +31,15 @@ if (config) {
     };
     dbSDK.onSnapshot(dbSDK.collection(db,'products'),snap=>window.WK.receiveProducts(snap.docs.map(d=>d.data())),err=>window.WK.cloudError(err));
     authSDK.onAuthStateChanged(auth,async user=>{
-      const generation=++authGeneration;stopOrders();stopAddresses();window.WK.receiveOrders([]);window.WK.receiveAddresses?.([]);window.WKCloud.user=user;window.WKCloud.owner=false;
+      const generation=++authGeneration;window.WK.ordersConnection?.('idle');stopOrders();stopAddresses();window.WK.receiveOrders([]);window.WK.receiveAddresses?.([]);window.WKCloud.user=user;window.WKCloud.owner=false;
       let isOwner=false;
       if(user){try{const token=await user.getIdTokenResult(true);isOwner=token.claims.shopkeeper===true}catch(err){if(generation===authGeneration)window.WK.cloudError(err);return}}
       if(generation!==authGeneration)return;
       window.WKCloud.owner=isOwner;
       window.WK.authChanged();
       if(user){const ref=dbSDK.collection(db,'orders');const q=window.WKCloud.owner?dbSDK.query(ref,dbSDK.orderBy('date','desc'),dbSDK.limit(100)):dbSDK.query(ref,dbSDK.where('uid','==',user.uid),dbSDK.orderBy('date','desc'),dbSDK.limit(100));
-        stopOrders=dbSDK.onSnapshot(q,snap=>window.WK.receiveOrders(snap.docs.map(d=>({id:d.id,...d.data()}))),err=>window.WK.cloudError(err));}
+        window.WK.ordersConnection?.('loading');
+        stopOrders=dbSDK.onSnapshot(q,snap=>{window.WK.receiveOrders(snap.docs.map(d=>({id:d.id,...d.data()})));window.WK.ordersConnection?.('live')},err=>{window.WK.ordersConnection?.('error');window.WK.cloudError(err)});}
       if(user&&window.WK.receiveAddresses)stopAddresses=dbSDK.onSnapshot(dbSDK.collection(db,'users',user.uid,'addresses'),snap=>window.WK.receiveAddresses(snap.docs.map(d=>d.data())),err=>window.WK.cloudError(err));
       else if(!user)window.WK.receiveOrders([]);
     });

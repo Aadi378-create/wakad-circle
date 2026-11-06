@@ -1,6 +1,7 @@
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],money=v=>'₹'+Number(v).toLocaleString('en-IN');
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const demo=!window.WK_FIREBASE_CONFIG;
+let portalOrdersState='idle';
 let products=[],orders=[],activeTab='orders',orderFilter='pending',knownOrders=new Set(),soundContext=null,soundEnabled=false;
 const statusOf=s=>({New:'Pending confirmation',Packing:'Preparing',Delivered:'Completed'}[s]||s);
 const isPending=o=>statusOf(o.status)==='Pending confirmation';
@@ -11,9 +12,13 @@ function notify(text){$('#toast').textContent=text;$('#toast').classList.add('sh
 function showModal(html){$('#modal').innerHTML=`<button class="close" style="float:right" aria-label="Close dialog" data-close-dialog>×</button>${html}`;$('#modal').showModal()}
 function setPortalState(){
   const permitted=allowed();$('#portalgate').hidden=permitted;$('#portalworkspace').hidden=!permitted;
-  $('#portalconnection').textContent=demo?'Demo portal':window.WKCloud?.user?(permitted?'● Live orders':'Account not authorized'):'Phone sign-in required';
+  $('#portalconnection').textContent=demo?'Demo only · no real orders':window.WKCloud?.user?(permitted?(portalOrdersState==='live'?'● Live orders':portalOrdersState==='error'?'Order connection failed':'Connecting to live orders…'):'Account not authorized'):'Phone sign-in required';
+  const notice=$('#portalnotice');notice.hidden=!demo&&(!permitted||portalOrdersState==='live');
+  notice.classList.toggle('demo-notice',demo);
+  notice.innerHTML=demo?'<div><b>Demo workspace — real customer orders do not appear here.</b><p>This uses sample data saved in this browser.</p></div><a class="primary" href="/shopkeeper.html">Open live shopkeeper portal →</a>':portalOrdersState==='error'?'<div><b>Live orders could not load.</b><p>The inbox is not confirmed empty. Reconnect and check your sign-in.</p></div><button class="portal-button" id="retryorders">Retry connection</button>':'<div><b>Loading the live inbox…</b><p>Waiting for Firebase to confirm your orders.</p></div>';
+  if($('#retryorders'))$('#retryorders').onclick=()=>location.reload();
   $('#portallogin').textContent=window.WKCloud?.user?'Sign out':'Sign in';
-  if(!permitted){$('#portalorders').innerHTML='';$('#portalinventory').innerHTML='';$('#orderalert').hidden=true}
+  if(!permitted){$('#pendingbadge').textContent='—';$('#portalorders').innerHTML='';$('#portalinventory').innerHTML='';$('#orderalert').hidden=true}
   if(permitted)renderPortal();
 }
 function beep(){if(!soundEnabled||!soundContext)return;for(let i=0;i<2;i++){const osc=soundContext.createOscillator(),gain=soundContext.createGain();osc.connect(gain);gain.connect(soundContext.destination);osc.frequency.value=i?880:660;gain.gain.setValueAtTime(.12,soundContext.currentTime+i*.22);gain.gain.exponentialRampToValueAtTime(.001,soundContext.currentTime+i*.22+.18);osc.start(soundContext.currentTime+i*.22);osc.stop(soundContext.currentTime+i*.22+.2)}}
@@ -26,7 +31,7 @@ function receiveOrders(list){
 }
 function renderPortal(){
   if(!allowed())return;const pending=orders.filter(isPending).length,active=orders.filter(isActive).length,pickups=orders.filter(o=>o.fulfillment==='pickup'&&!['Rejected','Completed'].includes(statusOf(o.status))).length;
-  $('#pendingbadge').textContent=pending;document.title=(pending?'('+pending+') ':'')+'Shopkeeper — Wakad Circle';
+  $('#pendingbadge').textContent=!demo&&portalOrdersState!=='live'?'—':pending;document.title=(pending?'('+pending+') ':'')+'Shopkeeper — Wakad Circle';
   $('#portalstats').innerHTML=[['Waiting for your check',pending,'Review & confirm'],['Being prepared / delivered',active,'Keep things moving'],['Upcoming pickups',pickups,'Have their basket ready'],['Low-stock products',products.filter(p=>p.stock<10).length,'Under 10 units']].map(([title,value,sub])=>`<article><small>${title}</small><b>${value}</b><span>${sub}</span></article>`).join('');
   renderOrderDesk();if(activeTab==='inventory'&&!document.activeElement?.closest('#portalinventory input'))renderInventory();
 }
@@ -43,7 +48,7 @@ function renderOrderDesk(){
     if(status==='Preparing')actions=[[pickup?'Ready for pickup':'Out for delivery',pickup?'Mark ready for pickup':'Send out for delivery']];
     if(status==='Ready for pickup')actions=[['Completed','Customer collected']];if(status==='Out for delivery')actions=[['Completed','Mark delivered']];
     return `<article class="portal-order" data-order-id="${escape(o.id)}"><div class="order-card-heading"><span class="fulfillment-tag ${pickup?'pickup-tag':''}">${pickup?'♧ Store pickup':'⌂ Delivery'}</span><span class="status-badge">${escape(status)}</span></div><h3>${escape(o.name)}</h3><div class="order-contact">${escape(o.phone)} · ${time(o.date)}</div>${pickup?`<div class="arrival-box"><b>Arriving in ${o.pickupMinutes} min after ordering</b><span>Requested pickup: ${time(o.pickupAt)}</span></div>`:`<p class="portal-address">${escape(o.address)} · ${escape(o.pin)}</p>`}<ul class="order-items">${o.items.map(i=>`<li><span>${escape(i.name)}</span><b>× ${i.qty}</b></li>`).join('')}</ul><div class="order-bill"><span>${escape(o.paymentMethod||(pickup?'Pay at pickup':'Cash on delivery'))}</span><strong>${money(o.total)}</strong></div>${isPending(o)?'<p class="availability-note">Check every item before accepting. Stock is reserved while you review.</p>':''}${o.rejectionReason?`<p class="rejection-note">${escape(o.rejectionReason)}</p>`:''}<div class="order-action-buttons">${actions.map(([next,label])=>`<button class="${next==='Rejected'?'reject-button':'primary'}" data-order-action="${escape(o.id)}" data-next="${next}">${label}</button>`).join('')}</div>${window.WCAdminPayment?.(o)||''}<small class="order-reference">${escape(o.id)}</small></article>`;
-  }).join(''):'<div class="portal-empty"><span>✓</span><h3>All clear for now.</h3><p>New orders will appear here automatically while the portal is open.</p></div>';
+  }).join(''):(!demo&&portalOrdersState!=='live'?'<div class="portal-empty"><h3>'+(portalOrdersState==='error'?'Orders are not connected.':'Loading your orders…')+'</h3><p>Wait for the live connection before checking the inbox.</p></div>':'<div class="portal-empty"><span>✓</span><h3>All clear for now.</h3><p>'+(orderFilter==='pending'?'No orders need review. Check All orders for accepted or completed orders.':'No orders match this filter.')+'</p></div>');
   $$('[data-order-action]').forEach(button=>button.onclick=()=>{if(button.dataset.next==='Rejected'){showModal('<h2>Let the customer know.</h2><form id="rejectform"><label>Why can’t you fulfil this order?<textarea name="reason" required minlength="3" maxlength="200" placeholder="For example: an item is unavailable"></textarea></label><button class="primary wide">Reject order & release stock</button></form>');$('#rejectform').onsubmit=async event=>{event.preventDefault();const submit=event.target.querySelector('button');submit.disabled=true;if(await updateOrder(button.dataset.orderAction,'Rejected',new FormData(event.target).get('reason')))$('#modal').close();else submit.disabled=false}}else updateOrder(button.dataset.orderAction,button.dataset.next,'',button)});
 }
 async function updateOrder(id,status,reason='',button){
@@ -67,7 +72,7 @@ function login(){
   $('#portalotp').onsubmit=async event=>{event.preventDefault();const b=event.target.querySelector('button');b.disabled=true;try{await window.WKCloud.verifyOTP(new FormData(event.target).get('code'));$('#modal').close();setPortalState()}catch(err){$('#portalerror').textContent=err.message;b.disabled=false}};
 }
 $('#gatelogin').onclick=login;$('#portallogin').onclick=async()=>{if(window.WKCloud?.user)await window.WKCloud.signOut();else login()};
-window.WK={receiveProducts(ps){products=ps;renderPortal()},receiveOrders,authChanged(){knownOrders=new Set();setPortalState()},cloudReady:setPortalState,cloudError(err){$('#portalconnection').textContent='Connection needs attention';notify(err.message)}};
+window.WK={ordersConnection(state){portalOrdersState=state;setPortalState()},receiveProducts(ps){products=ps;renderPortal()},receiveOrders,authChanged(){knownOrders=new Set();setPortalState()},cloudReady:setPortalState,cloudError(err){$('#portalconnection').textContent='Connection needs attention';notify(err.message)}};
 if(demo){
   $('#portallogin').hidden=true;$('#gatelogin').hidden=true;document.querySelectorAll('a[href="/"]').forEach(a=>a.href='/?mode=demo');
   fetch('catalog.json').then(r=>r.json()).then(catalog=>{products=JSON.parse(localStorage.getItem('wk-products')||'null')||catalog;receiveOrders(JSON.parse(localStorage.getItem('wk-orders')||'[]'));setPortalState()});
