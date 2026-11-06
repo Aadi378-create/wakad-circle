@@ -3,8 +3,8 @@ const oldPersist=persist;
 if(cloudConfigured){products=[];orders=[];render();persist=()=>localStorage.setItem('wk-cart',JSON.stringify(cart));}
 let afterLogin=null,otpPhone='',otpSent=false,resendAt=0,checkoutRequestId=null;
 function updateStatus(){
-  $('#connectionstatus').textContent=cloudConfigured?(window.WKCloud?'Firebase configured · '+(window.WKCloud.user?(window.WKCloud.owner?'Shopkeeper signed in':'Customer signed in'):'Sign in to order'):'Firebase connecting…'):'Presentation demo · No SMS or real orders';
-  $('#signinbutton').textContent=window.WKCloud?.user?'My account':'Phone sign-in';
+  $('#connectionstatus').textContent=cloudConfigured?(window.WKCloud?(window.WKCloud.user?(window.WKCloud.owner?'Shopkeeper signed in':'Signed in'):'Sign in to place an order'):'Connecting to your shop…'):'Demo · Sample data';
+  const accountLabel=window.WKCloud?.user?'My account':'Sign in';$('#signinbutton').setAttribute('aria-label',accountLabel);$('#signinbutton').title=accountLabel;
 }
 function login(next){
   afterLogin=typeof next==='function'?next:null;
@@ -37,7 +37,7 @@ window.WK={
   }
 };
 $('#signinbutton').onclick=()=>{if(!cloudConfigured&&window.WK_FIREBASE_PROJECT){location.href=location.pathname+'?mode=live';return}login()};
-const modeButton=document.createElement('button');modeButton.id='modebutton';modeButton.textContent=cloudConfigured?'Presentation mode':'Firebase mode';modeButton.onclick=()=>{location.href=location.pathname+(cloudConfigured?'?mode=demo':'?mode=live')};$('.demo-toolbar>div').prepend(modeButton);
+const modeButton=document.createElement('button');modeButton.id='modebutton';modeButton.textContent=cloudConfigured?'Try demo':'Back to live shop';modeButton.onclick=()=>{location.href=location.pathname+(cloudConfigured?'?mode=demo':'?mode=live')};$('.demo-menu>div').prepend(modeButton);
 let tourStep=0;
 const tourSteps=[
   {title:'Your kirana, on a screen.',text:'Show the shopkeeper familiar products, categories, and prices. Customers can search and fill a basket in seconds.',action:'Show a customer basket',target:'.hero'},
