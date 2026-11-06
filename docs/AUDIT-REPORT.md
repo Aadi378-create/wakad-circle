@@ -78,3 +78,9 @@ The amount is pre-filled, not cryptographically locked by a bank. Full order amo
 ## Demo/live inbox incident
 
 A reported missing cross-phone order was confirmed present in Firestore as Pending confirmation. The desktop preview previously left open was `/shopkeeper.html?mode=demo`, which reads only local sample data. The live portal was signed out; the approved shopkeeper account and server-issued role were confirmed present and enabled. No order was deleted, accepted or otherwise changed during this investigation. Added a prominent demo notice/live link and explicit live subscription loading/error states so an unconnected inbox cannot imply there are no orders. The existing 29 tests and syntax checks passed. Authenticated visual confirmation of the real order awaits the owner's direct OTP sign-in.
+
+## Production owner-app and persistence verification — 7 November 2026
+
+35 automated tests passed. Added durable-auth fallback, immediate listener delivery and cache metadata handling, old-account response isolation, refresh deduplication/sign-out race protection, hosted-demo suppression, and distinct shopkeeper app identity/scope checks. Production dependency audit remains at zero known vulnerabilities. No new gateway, payment API key or auth bypass was introduced.
+
+The signed-in owner's existing account restored in the new `/shopkeeper/` app without another OTP, and the live connection and existing order count loaded. A real production ₹1.00 UPI request was generated and its URI inspected for the configured recipient, amount and INR currency; its payment link was not opened and no money was transferred. Production ignores the old demo query. Full Android/iOS installation, prolonged overnight session retention, mobile-OS background behaviour and a bank-authorised transfer are not claimed as tested.

@@ -70,3 +70,5 @@ renderAdmin=function(){
   }
 };
 updateStatus();
+
+if(!window.WC_LOCAL_DEMO){$('.demo-menu').remove();}

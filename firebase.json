@@ -64,9 +64,25 @@
               "value": "no-cache"
             }
           ]
+        },
+        {
+          "source": "/shopkeeper/sw.js",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
         }
       ],
-      "site": "wakad-circle"
+      "site": "wakad-circle",
+      "redirects": [
+        {
+          "source": "/shopkeeper.html",
+          "destination": "/shopkeeper/",
+          "type": 301
+        }
+      ]
     },
     {
       "site": "wakad-kissan",

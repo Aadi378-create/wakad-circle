@@ -21,7 +21,7 @@ drawCart=function(){
   $('#closecart').onclick=closeCart;if($('#checkout'))$('#checkout').onclick=checkout;if($('#continue'))$('#continue').onclick=closeCart;
 };
 document.addEventListener('click',event=>{const button=event.target.closest('[data-fulfillment]');if(button)setFulfillment(button.dataset.fulfillment)});
-function needAccount(next){if(cloudConfigured&&!window.WKCloud?.user){login(next);return true}return false;}
+function needAccount(next){if(cloudConfigured&&(!window.WKCloud||window.WKCloud.restoring)){notify('Restoring your saved sign-in. Please wait a moment.');return true}if(cloudConfigured&&!window.WKCloud?.user){login(next);return true}return false;}
 function manageAddresses(back=''){
   if(needAccount(()=>manageAddresses(back)))return;
   commerceModal('addresses',`<h2>Your saved addresses</h2><p class="form-note">Save Home, Work, or another address. Delivery currently serves PIN 411057.</p><div class="address-list">${savedAddresses.length?savedAddresses.map(a=>`<article class="address-card ${a.id===currentAddress()?.id?'chosen':''}"><div><b>${escape(a.label)}</b><small>${escape(a.name)}</small><p>${escape(a.address)} · ${escape(a.pin)}</p></div><div class="address-actions"><button class="add" data-address-use="${a.id}">${a.id===currentAddress()?.id?'Selected':'Use address'}</button><button data-address-edit="${a.id}">Edit</button><button data-address-delete="${a.id}">Remove</button></div></article>`).join(''):'<div class="empty">No saved addresses yet.</div>'}</div><button class="primary wide" id="addaddress">+ Add address</button><button class="text-button wide" id="addressback">${back==='checkout'?'Back to checkout':'Done'}</button>`);
@@ -68,7 +68,7 @@ function showCircleAccount(){
 }
 $('#signinbutton').onclick=showCircleAccount;
 $('#location').onclick=()=>{commerceModal('fulfillment',`<h2>Your neighbourhood, your way.</h2>${fulfillmentPicker()}<button class="primary wide" id="openaddresses">Choose a delivery address</button><p class="form-note">Store pickup: ${escape(storeAddress)}</p>`);$$('[data-fulfillment]').forEach(button=>button.onclick=event=>{event.stopPropagation();setFulfillment(button.dataset.fulfillment);if(fulfillment==='delivery')manageAddresses();else $('#modal').close()});$('#openaddresses').onclick=()=>manageAddresses()};
-$('#manage').innerHTML='▦ <span>Shopkeeper portal</span>';$('#manage').onclick=()=>{location.href='/shopkeeper.html'+(cloudConfigured?'':'?mode=demo')};
+$('#manage').innerHTML='▦ <span>Shopkeeper portal</span>';$('#manage').onclick=()=>{location.href='/shopkeeper/'+(cloudConfigured?'':'?mode=demo')};
 const previousOrdersReceiver=window.WK.receiveOrders,previousAuthChanged=window.WK.authChanged;
 window.WK.receiveOrders=function(os){previousOrdersReceiver(os);if($('#modal').open&&$('#modal').dataset.view==='orders')showCustomerOrders()};
 window.WK.receiveAddresses=function(addresses){savedAddresses=addresses;selectedAddressId=localStorage.getItem(addressKey())||'';updateFulfillmentHeader();if($('#modal').open&&$('#modal').dataset.view==='addresses')manageAddresses()};

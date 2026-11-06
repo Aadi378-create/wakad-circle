@@ -1,8 +1,8 @@
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],money=v=>'₹'+Number(v).toLocaleString('en-IN');
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const demo=!window.WK_FIREBASE_CONFIG;
-let portalOrdersState='idle';
-let products=[],orders=[],activeTab='orders',orderFilter='pending',knownOrders=new Set(),soundContext=null,soundEnabled=false;
+let portalOrdersState='idle',lastOrderSync='',sessionErrorMessage='';
+let products=[],orders=[],activeTab='orders',orderFilter='all',knownOrders=new Set(),soundContext=null,soundEnabled=false;
 const statusOf=s=>({New:'Pending confirmation',Packing:'Preparing',Delivered:'Completed'}[s]||s);
 const isPending=o=>statusOf(o.status)==='Pending confirmation';
 const isActive=o=>!['Completed','Rejected','Pending confirmation'].includes(statusOf(o.status));
@@ -11,13 +11,14 @@ const allowed=()=>demo||window.WKCloud?.owner;
 function notify(text){$('#toast').textContent=text;$('#toast').classList.add('show');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),3500)}
 function showModal(html){$('#modal').innerHTML=`<button class="close" style="float:right" aria-label="Close dialog" data-close-dialog>×</button>${html}`;$('#modal').showModal()}
 function setPortalState(){
-  const permitted=allowed();$('#portalgate').hidden=permitted;$('#portalworkspace').hidden=!permitted;
-  $('#portalconnection').textContent=demo?'Demo only · no real orders':window.WKCloud?.user?(permitted?(portalOrdersState==='live'?'● Live orders':portalOrdersState==='error'?'Order connection failed':'Connecting to live orders…'):'Account not authorized'):'Phone sign-in required';
+  const permitted=allowed(),restoring=!demo&&(!window.WKCloud||window.WKCloud.restoring);$('#portalsession').textContent=sessionErrorMessage||(restoring?'Restoring your saved sign-in…':window.WKCloud?.user?(window.WKCloud.durableSession?'Sign-in saved on this device · no automatic app logout.':'Sign-in storage is blocked in this browser.'):'Sign in once on this device to keep your shop connected.');$('#portalgate').hidden=permitted||restoring;$('#portalworkspace').hidden=!permitted;
+  $('#portalconnection').textContent=demo?'Demo only · no real orders':restoring?'Restoring saved sign-in…':window.WKCloud?.user?(window.WKCloud.restoring?'Restoring sign-in…':permitted?(portalOrdersState==='live'?'● Live orders':portalOrdersState==='error'?'Order connection failed':portalOrdersState==='reconnecting'?'Reconnecting…':'Connecting to live orders…'):'Account not authorized'):'Phone sign-in required';
   const notice=$('#portalnotice');notice.hidden=!demo&&(!permitted||portalOrdersState==='live');
   notice.classList.toggle('demo-notice',demo);
-  notice.innerHTML=demo?'<div><b>Demo workspace — real customer orders do not appear here.</b><p>This uses sample data saved in this browser.</p></div><a class="primary" href="/shopkeeper.html">Open live shopkeeper portal →</a>':portalOrdersState==='error'?'<div><b>Live orders could not load.</b><p>The inbox is not confirmed empty. Reconnect and check your sign-in.</p></div><button class="portal-button" id="retryorders">Retry connection</button>':'<div><b>Loading the live inbox…</b><p>Waiting for Firebase to confirm your orders.</p></div>';
-  if($('#retryorders'))$('#retryorders').onclick=()=>location.reload();
-  $('#portallogin').textContent=window.WKCloud?.user?'Sign out':'Sign in';
+  notice.innerHTML=demo?'<div><b>Demo workspace — real customer orders do not appear here.</b><p>This uses sample data saved in this browser.</p></div><a class="primary" href="/shopkeeper/">Open live shopkeeper portal →</a>':portalOrdersState==='error'?'<div><b>Live orders could not load.</b><p>The inbox is not confirmed empty. Reconnect and check your sign-in.</p></div><button class="portal-button" id="retryorders">Retry connection</button>':'<div><b>Loading the live inbox…</b><p>Waiting for Firebase to confirm your orders.</p></div>';
+  if($('#retryorders'))$('#retryorders').onclick=refreshPortalOrders;
+  $('#refreshorders').disabled=!permitted||restoring;$('#refreshstamp').textContent=lastOrderSync?'Last server check: '+lastOrderSync:'';
+  $('#portallogin').disabled=restoring;$('#portallogin').textContent=window.WKCloud?.user?'Sign out':'Sign in';
   if(!permitted){$('#pendingbadge').textContent='—';$('#portalorders').innerHTML='';$('#portalinventory').innerHTML='';$('#orderalert').hidden=true}
   if(permitted)renderPortal();
 }
@@ -31,7 +32,7 @@ function receiveOrders(list){
 }
 function renderPortal(){
   if(!allowed())return;const pending=orders.filter(isPending).length,active=orders.filter(isActive).length,pickups=orders.filter(o=>o.fulfillment==='pickup'&&!['Rejected','Completed'].includes(statusOf(o.status))).length;
-  $('#pendingbadge').textContent=!demo&&portalOrdersState!=='live'?'—':pending;document.title=(pending?'('+pending+') ':'')+'Shopkeeper — Wakad Circle';
+  $('#pendingbadge').textContent=!demo&&portalOrdersState!=='live'?'—':pending;document.title=(pending?'('+pending+') ':'')+'Wakad Circle Shopkeeper';
   $('#portalstats').innerHTML=[['Waiting for your check',pending,'Review & confirm'],['Being prepared / delivered',active,'Keep things moving'],['Upcoming pickups',pickups,'Have their basket ready'],['Low-stock products',products.filter(p=>p.stock<10).length,'Under 10 units']].map(([title,value,sub])=>`<article><small>${title}</small><b>${value}</b><span>${sub}</span></article>`).join('');
   renderOrderDesk();if(activeTab==='inventory'&&!document.activeElement?.closest('#portalinventory input'))renderInventory();
 }
@@ -61,7 +62,7 @@ async function updateOrder(id,status,reason='',button){
 function renderInventory(){
   const query=$('#inventorysearch').value.toLowerCase();const list=products.filter(p=>p.name.toLowerCase().includes(query));
   $('#portalinventory').innerHTML=`<table><thead><tr><th>PRODUCT</th><th>PRICE (₹)</th><th>STOCK</th><th></th></tr></thead><tbody>${list.map(p=>`<tr><td><b>${escape(p.emoji)} ${escape(p.name)}</b><small>${escape(p.unit)}</small></td><td><input id="portal-price-${p.id}" type="number" min="1" step=".01" value="${p.price}" aria-label="Price for ${escape(p.name)}"></td><td><input id="portal-stock-${p.id}" type="number" min="0" step="1" value="${p.stock}" aria-label="Stock for ${escape(p.name)}"></td><td><button class="portal-button" data-save-product="${p.id}">Save</button></td></tr>`).join('')}</tbody></table>`;
-  $$('[data-save-product]').forEach(button=>button.onclick=async()=>{const p=products.find(p=>p.id===Number(button.dataset.saveProduct)),price=Number($('#portal-price-'+p.id).value),stock=Number($('#portal-stock-'+p.id).value);if(price<=0||!Number.isFinite(price)||!Number.isInteger(stock)||stock<0)return notify('Enter a valid price and whole-number stock.');button.disabled=true;try{if(demo){Object.assign(p,{price,mrp:Math.max(price,p.mrp),stock});localStorage.setItem('wk-products',JSON.stringify(products));renderPortal()}else await window.WKCloud.saveProduct({...p,price,mrp:Math.max(price,p.mrp),stock});notify('Saved. Your customer catalog is up to date.')}catch(err){notify(err.message);renderInventory()}finally{button.disabled=false}});
+  $$('[data-save-product]').forEach(button=>button.onclick=async()=>{const p=products.find(p=>p.id===Number(button.dataset.saveProduct)),price=Number($('#portal-price-'+p.id).value),stock=Number($('#portal-stock-'+p.id).value);if(price<=0||!Number.isFinite(price)||!Number.isInteger(stock)||stock<0)return notify('Enter a valid price and whole-number stock.');button.disabled=true;try{if(demo){Object.assign(p,{price,mrp:Math.max(price,p.mrp),stock});localStorage.setItem('wk-products',JSON.stringify(products));renderPortal()}else await window.WKCloud.saveProduct({...p,price,mrp:Math.max(price,p.mrp),stock});notify('Saved. Your customer catalog is up to date.')}catch(err){notify(err.message);renderInventory()}finally{button.disabled=!allowed()}});
 }
 $('#inventorysearch').oninput=renderInventory;
 $('#portaladdproduct').onclick=()=>{showModal('<h2>Add a product</h2><form id="portalproduct"><label>Name<input name="name" required maxlength="100"></label><label>Pack size<input name="unit" required maxlength="30" placeholder="500 g"></label><label>Category<select name="cat"><option value="0">Vegetables & fruits</option><option value="1">Dairy & breakfast</option><option value="2">Atta, rice & dal</option><option value="3">Snacks</option><option value="4">Beverages</option><option value="5">Home & care</option></select></label><label>Price (₹)<input name="price" required type="number" min="1" step=".01"></label><label>Stock<input name="stock" required type="number" min="0" step="1"></label><button class="primary wide">Add product</button></form>');$('#portalproduct').onsubmit=async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.target)),p={id:Date.now(),name:data.name,unit:data.unit,cat:Number(data.cat),price:Number(data.price),mrp:Number(data.price),stock:Number(data.stock),emoji:'♧'};try{if(demo){products.push(p);localStorage.setItem('wk-products',JSON.stringify(products));renderPortal()}else await window.WKCloud.saveProduct(p);$('#modal').close();notify('Product added')}catch(err){notify(err.message)}}};
@@ -72,12 +73,15 @@ function login(){
   $('#portalotp').onsubmit=async event=>{event.preventDefault();const b=event.target.querySelector('button');b.disabled=true;try{await window.WKCloud.verifyOTP(new FormData(event.target).get('code'));$('#modal').close();setPortalState()}catch(err){$('#portalerror').textContent=err.message;b.disabled=false}};
 }
 $('#gatelogin').onclick=login;$('#portallogin').onclick=async()=>{if(window.WKCloud?.user)await window.WKCloud.signOut();else login()};
-window.WK={ordersConnection(state){portalOrdersState=state;setPortalState()},receiveProducts(ps){products=ps;renderPortal()},receiveOrders,authChanged(){knownOrders=new Set();setPortalState()},cloudReady:setPortalState,cloudError(err){$('#portalconnection').textContent='Connection needs attention';notify(err.message)}};
+window.WK={sessionError(err){sessionErrorMessage=err.message;setPortalState()},ordersConnection(state){portalOrdersState=state;if(state==='live')lastOrderSync=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});setPortalState()},receiveProducts(ps){products=ps;renderPortal()},receiveOrders,authChanged(){sessionErrorMessage='';knownOrders=new Set();setPortalState()},cloudReady:setPortalState,cloudError(err){$('#portalconnection').textContent='Connection needs attention';notify(err.message)}};
 if(demo){
   $('#portallogin').hidden=true;$('#gatelogin').hidden=true;document.querySelectorAll('a[href="/"]').forEach(a=>a.href='/?mode=demo');
-  fetch('catalog.json').then(r=>r.json()).then(catalog=>{products=JSON.parse(localStorage.getItem('wk-products')||'null')||catalog;receiveOrders(JSON.parse(localStorage.getItem('wk-orders')||'[]'));setPortalState()});
+  fetch('/catalog.json').then(r=>r.json()).then(catalog=>{products=JSON.parse(localStorage.getItem('wk-products')||'null')||catalog;receiveOrders(JSON.parse(localStorage.getItem('wk-orders')||'[]'));setPortalState()});
   window.addEventListener('storage',event=>{if(event.key==='wk-orders')receiveOrders(JSON.parse(event.newValue||'[]'));if(event.key==='wk-products'){products=JSON.parse(event.newValue||'[]');renderPortal()}});
 }
+const refreshButton=document.createElement('button');refreshButton.id='refreshorders';refreshButton.className='portal-button';refreshButton.textContent='↻ Refresh orders';refreshButton.onclick=refreshPortalOrders;$('.portal-header-actions').append(refreshButton);
+const stamp=document.createElement('small');stamp.id='refreshstamp';stamp.className='refresh-stamp';$('.portal-header-actions').append(stamp);
+async function refreshPortalOrders(){const button=$('#refreshorders');button.disabled=true;try{if(demo){receiveOrders(JSON.parse(localStorage.getItem('wk-orders')||'[]'));notify('Local orders refreshed')}else{const updated=await window.WKCloud.refreshOrders();notify(updated?'Orders checked with the server':'Please wait for the saved account to finish restoring.')}}catch(err){notify(err.message)}finally{button.disabled=!allowed()}}
 setPortalState();
 
 document.addEventListener('click',event=>{if(event.target.closest('[data-close-dialog]'))document.querySelector('dialog')?.close()});
