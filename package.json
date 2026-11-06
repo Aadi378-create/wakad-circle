@@ -1,0 +1,16 @@
+{
+  "name": "wakad-kissan",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Phone and laptop kirana prototype with Firebase Authentication, Firestore and Cloud Functions",
+  "scripts": {
+    "start": "node server.cjs",
+    "test": "node --test functions/domain.test.cjs functions/auth.test.cjs tests/static.test.cjs tests/server.test.cjs",
+    "check": "node scripts/check-syntax.cjs",
+    "audit:dependencies": "npm --prefix functions audit --omit=dev",
+    "deploy:firebase": "firebase deploy --project wakad-kissan"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

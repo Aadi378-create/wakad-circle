@@ -21,4 +21,3 @@ Catalog edits in Manage shop sync through Firebase without a code release or app
 Read [operations](docs/OPERATIONS.md), [hosting and cost estimate](docs/HOSTING-AND-COSTS.md), [Play release readiness](docs/PLAY-RELEASE.md), and [audit report](docs/AUDIT-REPORT.md).
 
 Never commit Admin credentials, CLI authorization codes, OTPs, or Android signing keys. The older ChatGPT Sites deployment remains owner-private; Firebase Hosting provides ordinary phone/laptop access. The installable web app is not a Google Play release. Checkout uses cash on delivery; there is no payment gateway.
-

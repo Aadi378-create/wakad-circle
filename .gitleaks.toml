@@ -1,0 +1,9 @@
+title = "Wakad Kissan repository secret scan"
+[extend]
+useDefault = true
+[[allowlists]]
+description = "Dependency trees and local tool output are not authored application source"
+paths = ['''(^|/)node_modules/''', '''(^|/)outputs/''', '''(^|/)firebase-debug\.log$''']
+[[allowlists]]
+description = "Public Firebase web API identifier; authorization is enforced by rules and callable functions"
+regexes = ['''AIzaSyB9cAaEBK3-Rq6vj-Y64xPcSP0jAcSNspk''']
