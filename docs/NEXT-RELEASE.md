@@ -1,8 +1,8 @@
-# Unreleased shop update
+# Shop update — release notes
 
-Prepared 7 November 2026 on branch `codex/unreleased-shop-updates`. **Not merged into main and not deployed to Firebase or Sites.** The current installed/live prototype remains unchanged. This document describes staged code, not live availability. The earlier AUDIT-REPORT.md describes the preceding published release.
+Release authorized 7 November 2026. The previously staged branch is merged into main for publication to both apps. Deployment checks and remaining configuration are recorded below. The original audit report describes the preceding release; this document supplements it.
 
-## Included in this branch
+## Included features
 
 | Feature | Behavior |
 | --- | --- |
@@ -15,8 +15,8 @@ Prepared 7 November 2026 on branch `codex/unreleased-shop-updates`. **Not merged
 | Low stock / bulk edits | Low-stock review identifies products below ten units. Export the current price/stock/revision CSV, edit it, paste up to 100 rows and review before applying. Any stale revision aborts the entire batch. New products remain available through Add product. |
 | Cancellation / refunds | Customers can cancel unpaid orders before store acceptance. Stock is restored once. Later cancellation needs store contact. Bank/cash refunds are recorded only after money is returned externally, with outstanding refunds visible in order history. |
 | Map links | Pickup-area/location and owner delivery-direction links open Google Maps on deliberate click, using encoded addresses. No Maps API key, automatic geolocation, tile loading or paid embedded SDK. Delivery remains PIN 411057; no unverified radius/distance claim is made. |
-| Closed-app order alerts | FCM token registration, generic server notifications, scoped worker push/click handling and invalid/revoked-owner token cleanup are implemented. Owner registration is authenticated and capped at ten devices. Token collection is opt-in. **Requires the release configuration and real-phone acceptance below; not operational on the current live app.** |
-| App Check preparation | Optional reCAPTCHA v3 initialization and backend ENFORCE_APP_CHECK switch are staged. Not enabled against production; registration/monitoring must precede enforcement. |
+| Closed-app order alerts | FCM token registration, generic server notifications, scoped worker push/click handling and invalid/revoked-owner token cleanup are implemented. Owner registration is authenticated and capped at ten devices. Token collection is opt-in. The approved public VAPID key is configured; real-phone permission and delivery checks remain. |
+| App Check preparation | Optional reCAPTCHA Enterprise initialization and backend ENFORCE_APP_CHECK switch are staged. Not enabled against production; registration/monitoring must precede enforcement. |
 
 ## Local verification
 
@@ -24,17 +24,21 @@ The preview uses an explicitly isolated Auth/Functions/Firestore emulator projec
 
 Tests cover authentication/role forgery, private profiles/notification devices, IST opening boundaries, atomic cash/UPI collection, customer proposal approval, cancellation/restoration, bulk revision conflicts, CSV validation, install-state handling and privacy of push payloads. The browser check saved a test profile, generated the test order's exact ₹52 QR without opening its payment link, and verified a pause update arrived in the customer app. The profile was inspected at a 390px viewport. No SMS was sent and no money moved.
 
-Verification result: 49 unit/static/session tests and 15 isolated emulator integration tests passed (64 total). Syntax checks passed for 42 JavaScript files. Both complete npm dependency audits reported zero known vulnerabilities. Gitleaks found no unallowlisted secrets in the working source. These checks do not certify absence of all vulnerabilities. Live notification transport, App Check enforcement, bank settlement and physical-phone installation are not claimed as tested.
+Verification result: 52 unit/static/session tests and 15 isolated emulator integration tests passed (67 total). Syntax checks passed for 45 JavaScript files. Both complete npm dependency audits reported zero known vulnerabilities. Gitleaks found no unallowlisted secrets in the working source. These checks do not certify absence of all vulnerabilities. Live notification transport, App Check enforcement, bank settlement and physical-phone installation are not claimed as tested.
 
 Run README checks and the integration suite before release. For browser QA only, start Firebase emulators using firebase.preview.json with project demo-wakad-circle-audit, run scripts/seed-preview.cjs with both emulator host variables, then scripts/preview-next.cjs. The seeder refuses to run without the exact local emulator hosts. Test fixtures are disposable. Stop the preview and emulators when finished.
 
-## Remaining release configuration — deliberately not applied live
+## Release configuration and remaining checks
 
-1. Configure the Firebase project's Web Push certificate/public VAPID key as WC_PUSH_VAPID_KEY, verify the FCM registration API and required permissions, deploy the new trigger/callables/rules/worker together, then opt in on the actual owner phone. Test foreground, background, closed-app, revoked-owner and signed-out scenarios. Push delivery depends on browser/OS support and power settings; it is not guaranteed. No live push notification was sent during this work.
-2. Register the web app/origins in App Check, set WC_APP_CHECK_SITE_KEY, deploy the client and monitor valid traffic before enabling ENFORCE_APP_CHECK=true and any console enforcement. No debug token belongs in production. Existing installed apps must update before strict enforcement. These options follow Firebase's official App Check documentation.
-3. Configure billing budget alerts and log/error monitoring through the project owner account, and choose a paid backup retention policy with a restore drill. No cloud spending, backup schedule, billing policy or alert recipient was changed while the user requested an unreleased update. Those operational settings are rollout work, not completed live features.
+1. The approved Firebase Web Push certificate is configured and the registration API is enabled. Owner new-order and customer progress triggers are deployed. Customers and owners must opt in on each device. Real-phone foreground/background/closed-app testing remains; no live customer order or payment was changed for QA.
+2. App Check enrollment/enforcement remains off for this low-cost shopkeeper demonstration, following the owner's latest preference. Google's console marks classic reCAPTCHA deprecated and requires supported Enterprise/Fraud Defense registration. The code supports Enterprise; no paid registration or strict enforcement was activated.
+3. Paid backup schedules remain off. Existing Firebase authentication, rules, rate limits and hosting headers remain active. A small demo billing warning is attempted separately; alerts never impose a hard spending cap. SMS authentication and Blaze usage may incur charges, so a zero-cost guarantee is not made. Existing sign-in sessions avoid repeated SMS requests.
 4. Add the exact shop address and a public store contact in the owner settings; the existing generic Wakad, Pune · 411057 remains the fallback. Check Maps directions before advertising pickup.
 5. Test cash pickup, cash delivery, converted UPI receipt, decline/cancel and refund on the actual phone and laptop. Merchant receipt checking remains manual; there is no automatic gateway settlement or transfer.
-6. Publish only after the owner requests the later web release. Keep the current production host and database intact. Deploy backend/rules and both frontend apps as one coordinated release; do not deploy a frontend that calls unavailable new endpoints.
+6. The owner authorized publication of all updates. Backend functions, access rules and both app shells are released together. Existing data and accounts are retained.
 
 Sources: [Google Maps URLs](https://developers.google.com/maps/documentation/urls/get-started), [Firebase web messaging setup](https://firebase.google.com/docs/cloud-messaging/web/get-started), [Firebase web App Check](https://firebase.google.com/docs/app-check/web/recaptcha-provider), [callable App Check enforcement](https://firebase.google.com/docs/app-check/cloud-functions).
+
+## Customer progress notifications
+
+Customers can opt in under My account → Order notifications. Accepted, Preparing, Ready for pickup, Out for delivery, Completed and Rejected produce a generic push; basket proposals, payment confirmation and refund updates also notify. Foreground order updates remain visible without push permission. Customer subscriptions are UID-scoped, private and capped at ten devices; disabled accounts are excluded and invalid tokens cleaned up. Both apps use a shared root push registration to avoid Firebase token replacement when installed in the same browser; clicks route to the correct app. No customer name, address or basket appears on the lock screen. Sign-out attempts to remove the current device subscription. Delivery depends on device permission and browser/OS support, not on Firebase order propagation alone.

@@ -1,6 +1,6 @@
 # Wakad Circle
 
-> This checkout is on the unreleased shop-update branch. See [next release](docs/NEXT-RELEASE.md) for staged features, local QA and remaining release configuration. The published prototype has not been updated with this branch.
+The 7 November shop update adds profiles, sharing, store controls, revised baskets, order-linked collection and opt-in order notifications. See [release notes](docs/NEXT-RELEASE.md) for verification and operational limits.
 
 Two connected installable apps for Wakad, Pune:
 

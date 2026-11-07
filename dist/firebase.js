@@ -9,13 +9,21 @@ if (config) {
     const app=appSDK.initializeApp(config), auth=authSDK.getAuth(app), db=dbSDK.getFirestore(app);
     const emulator=window.WC_EMULATOR_HOSTS&&['localhost','127.0.0.1'].includes(location.hostname);
     if(emulator){authSDK.connectAuthEmulator(auth,'http://127.0.0.1:9095',{disableWarnings:true});auth.settings.appVerificationDisabledForTesting=true;dbSDK.connectFirestoreEmulator(db,'127.0.0.1',8085)}
-    if(window.WC_APP_CHECK_SITE_KEY&&!emulator){const check=await import(base+'firebase-app-check.js');check.initializeAppCheck(app,{provider:new check.ReCaptchaV3Provider(window.WC_APP_CHECK_SITE_KEY),isTokenAutoRefreshEnabled:true})}
+    if(window.WC_APP_CHECK_SITE_KEY&&!emulator){const check=await import(base+'firebase-app-check.js');check.initializeAppCheck(app,{provider:new (window.WC_APP_CHECK_PROVIDER==='v3'?check.ReCaptchaV3Provider:check.ReCaptchaEnterpriseProvider)(window.WC_APP_CHECK_SITE_KEY),isTokenAutoRefreshEnabled:true})}
     const durableSession=await window.WCSession.persistentAuth(authSDK,auth);
     const functions=fnSDK.getFunctions(app,window.WK_FUNCTIONS_REGION||'asia-south1');
     if(emulator)fnSDK.connectFunctionsEmulator(functions,'127.0.0.1',5005);
     let verifier, confirmation,stopAddresses=()=>{},stopProfile=()=>{},authGeneration=0,alertToken=null;
     const channel=window.WCSession.orderChannel({sdk:dbSDK,db,onOrders:list=>window.WK.receiveOrders(list),onState:state=>window.WK.ordersConnection?.(state),onError:err=>window.WK.cloudError(err)});
     const call=(name,data)=>fnSDK.httpsCallable(functions,name)(data).then(r=>r.data);
+    async function enableNotifications(ownerApp){
+      if(!window.WKCloud.user)throw Error('Sign in to enable order notifications.');if(ownerApp&&!window.WKCloud.owner)throw Error('Shopkeeper sign-in required.');
+      if(!window.WC_PUSH_VAPID_KEY)throw Error('Order notifications are not configured yet.');
+      const sdk=await import(base+'firebase-messaging.js');if(!await sdk.isSupported())throw Error('Notifications are unavailable in this browser. Try the installed app in Chrome or Safari.');
+      if(await Notification.requestPermission()!=='granted')throw Error('Allow notifications in browser settings to receive order updates.');
+      const registration=await navigator.serviceWorker.getRegistration('/')||await navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'});if(!registration.active)await new Promise((resolve,reject)=>{const worker=registration.installing||registration.waiting;if(!worker)return reject(Error('App setup is still loading. Reopen it and try again.'));const timer=setTimeout(()=>reject(Error('App setup timed out. Reopen it and try again.')),30000);worker.addEventListener('statechange',()=>{if(worker.state==='activated'){clearTimeout(timer);resolve()}else if(worker.state==='redundant'){clearTimeout(timer);reject(Error('App setup needs an update. Reopen it and try again.'))}})});
+      const uid=window.WKCloud.user.uid,token=await sdk.getToken(sdk.getMessaging(app),{vapidKey:window.WC_PUSH_VAPID_KEY,serviceWorkerRegistration:registration});if(uid!==window.WKCloud.user?.uid)throw Error('Your account changed. Please sign in again.');await call(ownerApp?'registerOrderAlerts':'registerCustomerAlerts',{token});try{localStorage.setItem((ownerApp?'wc-alert-device-':'wc-customer-alert-device-')+uid,token)}catch{}return true;
+    }
     window.WKCloud={
       user:null,owner:false,durableSession,restoring:true,refreshOrders:()=>channel.refresh(),
       async sendOTP(phone){
@@ -25,7 +33,7 @@ if (config) {
         confirmation=await authSDK.signInWithPhoneNumber(auth,phone,verifier);
       },
       async verifyOTP(code){if(!confirmation)throw new Error('Request an OTP first.');const result=await confirmation.confirm(code);window.WKCloud.user=result.user;const token=await result.user.getIdTokenResult();window.WKCloud.owner=token.claims.shopkeeper===true;window.WK.authChanged();},
-      async signOut(){let token=alertToken;const key='wc-alert-device-'+window.WKCloud.user?.uid;try{token||=localStorage.getItem(key);if(token)await call('removeOrderAlerts',{token})}catch{console.warn('Notification-device cleanup could not complete.')}finally{try{localStorage.removeItem(key)}catch{}alertToken=null}await authSDK.signOut(auth);},
+      async signOut(){const uid=window.WKCloud.user?.uid;for(const [prefix,endpoint]of [['wc-alert-device-','removeOrderAlerts'],['wc-customer-alert-device-','removeCustomerAlerts']]){const key=prefix+uid;try{const token=localStorage.getItem(key);if(token)await call(endpoint,{token})}catch{console.warn('Notification-device cleanup could not complete.')}finally{try{localStorage.removeItem(key)}catch{}}}await authSDK.signOut(auth);},
       saveProfile: data=>call('saveProfile',data),
       saveStoreSettings: data=>call('saveStoreSettings',data),
       bulkSaveProducts: products=>call('bulkSaveProducts',{products}),
@@ -33,14 +41,8 @@ if (config) {
       cancelOrder: id=>call('cancelOrder',{id}),
       proposeOrderChange: data=>call('proposeOrderChange',data),
       respondOrderChange: data=>call('respondOrderChange',data),
-      async enableOrderAlerts(){
-        if(!window.WKCloud.owner)throw Error('Shopkeeper sign-in required.');
-        if(!window.WC_PUSH_VAPID_KEY)throw Error('Order notifications will be available after the next release is configured. Keep the shopkeeper app open for now.');
-        const messagingSDK=await import(base+'firebase-messaging.js');if(!await messagingSDK.isSupported())throw Error('This browser does not support order notifications. Try the installed app in Chrome.');
-        if(await Notification.requestPermission()!=='granted')throw Error('Allow notifications in your browser settings to receive order alerts.');
-        const registration=await navigator.serviceWorker.getRegistration('/shopkeeper/');if(!registration)throw Error('Installable app is still loading. Please reopen it.');
-        const uid=window.WKCloud.user?.uid,token=await messagingSDK.getToken(messagingSDK.getMessaging(app),{vapidKey:window.WC_PUSH_VAPID_KEY,serviceWorkerRegistration:registration});if(uid!==window.WKCloud.user?.uid)throw Error('Your account changed. Please sign in again.');await call('registerOrderAlerts',{token});alertToken=token;try{localStorage.setItem('wc-alert-device-'+uid,token)}catch{}return true;
-      },
+      enableOrderAlerts:()=>enableNotifications(true),
+      enableCustomerAlerts:()=>enableNotifications(false),
       saveProduct: product=>call('saveProduct',product),
       placeOrder: payload=>call('placeOrder',payload),
       setStatus: (id,status,reason='')=>call('setOrderStatus',{id,status,reason}),

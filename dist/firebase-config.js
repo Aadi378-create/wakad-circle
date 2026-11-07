@@ -12,3 +12,5 @@ if(new URLSearchParams(location.search).has('mode')){const url=new URL(location.
 window.WK_FUNCTIONS_REGION = 'asia-south1';
 
 window.WC_STORE_ADDRESS = "Wakad, Pune · 411057";
+
+window.WC_PUSH_VAPID_KEY="BJQOHSCW9Safix-jvviVzQaDpl6-bjYoeYiS0v1HghCcGG4He7U3a5ibHpc-_XJahcXLIe11TdoRHanXH1fWyV8";
