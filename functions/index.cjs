@@ -3,7 +3,7 @@ const {initializeApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {validateCheckoutTotal,nextAddressRate,validateProduct,quote,fulfillmentDetails,validateAddress,orderTransition,nextOrderRate,nextProductRevision}=require('./domain.cjs');
 const payment=require('./payments.cjs'),{randomBytes}=require('node:crypto');
-initializeApp();const db=getFirestore(),options={region:'asia-south1',maxInstances:5,invoker:'public',cors:['https://wakad-circle.web.app','https://wakad-circle.firebaseapp.com','https://wakad-kissan.web.app','https://wakad-kissan.firebaseapp.com','https://wakad-kissan-kirana.peakedbeam2.chatgpt.site']};
+initializeApp();const db=getFirestore(),options={enforceAppCheck:process.env.ENFORCE_APP_CHECK==='true',region:'asia-south1',maxInstances:5,invoker:'public',cors:[...(process.env.FUNCTIONS_EMULATOR==='true'?['http://localhost:4175']:[]),'https://wakad-circle.web.app','https://wakad-circle.firebaseapp.com','https://wakad-kissan.web.app','https://wakad-kissan.firebaseapp.com','https://wakad-kissan-kirana.peakedbeam2.chatgpt.site']};
 function signedIn(request){if(!request.auth||!request.auth.token.phone_number)throw new HttpsError('unauthenticated','Sign in with your phone number first.');}
 function owner(request){signedIn(request);if(request.auth.token.shopkeeper!==true)throw new HttpsError('permission-denied','Only the shopkeeper can make this change.');}
 function validate(fn){try{return fn()}catch(e){throw new HttpsError('invalid-argument',e.message)}}
@@ -15,6 +15,7 @@ exports.placeOrder=onCall(options,async request=>{
   const orderRef=db.collection('orders').doc(request.auth.uid+'_'+key);
   return db.runTransaction(async tx=>{
     const previous=await tx.get(orderRef);if(previous.exists)return {id:orderRef.id,total:previous.data().total,status:previous.data().status};
+    const settings=await tx.get(db.doc('store/config'));const availability=require('./updates.cjs').availability(settings.exists?settings.data():null);if(!availability.open)throw new HttpsError('failed-precondition',availability.message);
     const rateRef=db.collection('orderLimits').doc(request.auth.uid),rateSnapshot=await tx.get(rateRef);
     let rate;try{rate=nextOrderRate(rateSnapshot.exists?rateSnapshot.data():null,Date.now())}catch(err){throw new HttpsError('resource-exhausted',err.message)}
     const refs=lines.map(l=>db.collection('products').doc(String(l.id)));
@@ -35,6 +36,7 @@ exports.setOrderStatus=onCall(options,async request=>{
   return db.runTransaction(async tx=>{
     const snap=await tx.get(ref);if(!snap.exists)throw new HttpsError('not-found','Order not found.');
     const order=snap.data();let change;try{change=orderTransition(order,status)}catch(err){throw new HttpsError('failed-precondition',err.message)}
+    if(status==='Accepted'&&order.proposal?.state==='awaiting-customer')throw new HttpsError('failed-precondition','Wait for the customer to approve the revised basket.');
     if(change.unchanged)return {ok:true,status};
     if(change.restore){
       const items=order.items.filter(i=>Number.isSafeInteger(i.id));
@@ -45,6 +47,9 @@ exports.setOrderStatus=onCall(options,async request=>{
     return {ok:true,status};
   });
 });
+
+Object.assign(exports,require('./updates.cjs').build({db,FieldValue,HttpsError,onCall,options,signedIn,owner,validate}));
+exports.notifyNewOrder=require('firebase-functions/v2/firestore').onDocumentCreated({document:'orders/{orderId}',region:'asia-south1',maxInstances:5},event=>require('./order-alerts.cjs').sendOrderAlert({db,auth:require('firebase-admin/auth').getAuth(),messaging:require('firebase-admin/messaging').getMessaging()},event));
 exports.saveAddress=onCall(options,async request=>{
   signedIn(request);const address=validate(()=>validateAddress(request.data)),collection=db.collection('users').doc(request.auth.uid).collection('addresses');
   await db.runTransaction(async tx=>{const rateRef=db.collection('addressLimits').doc(request.auth.uid),rateSnapshot=await tx.get(rateRef);let rate;try{rate=nextAddressRate(rateSnapshot.exists?rateSnapshot.data():null,Date.now())}catch(e){throw new HttpsError('resource-exhausted',e.message)}const snap=await tx.get(collection);if(snap.size>=10&&!snap.docs.some(d=>d.id===address.id))throw new HttpsError('resource-exhausted','You can save up to 10 addresses.');tx.set(rateRef,rate);tx.set(collection.doc(address.id),{...address,updatedAt:FieldValue.serverTimestamp()})});return {ok:true};

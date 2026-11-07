@@ -1,5 +1,7 @@
 # Wakad Circle
 
+> This checkout is on the unreleased shop-update branch. See [next release](docs/NEXT-RELEASE.md) for staged features, local QA and remaining release configuration. The published prototype has not been updated with this branch.
+
 Two connected installable apps for Wakad, Pune:
 
 - Customer shop: https://wakad-circle.web.app/

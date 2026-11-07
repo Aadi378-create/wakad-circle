@@ -1,9 +1,10 @@
 let installPrompt=null;
 const installButton=document.createElement('button');installButton.id='installapp';installButton.textContent='Install app';
 $('.app-toolbar>div').prepend(installButton);
+const installState=WCNext.bindInstall(installButton);
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;});
 installButton.onclick=async()=>{
-  if(installPrompt){await installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;return;}
+  if(installPrompt){await installPrompt.prompt();const choice=await installPrompt.userChoice;if(choice.outcome==='accepted')installState.accepted();installPrompt=null;return;}
   showModal('<h2>Keep your kirana close.</h2><p><b>Android / laptop Chrome:</b> open the browser menu and choose Install app or Add to Home screen.</p><p><b>iPhone:</b> open in Safari, tap Share, then Add to Home Screen.</p><p class="form-note">Catalog and orders sync when connected to the internet. Phone sign-in is required on each new device.</p>');
 };
 function connectionChanged(){
