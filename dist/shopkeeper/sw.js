@@ -1,5 +1,5 @@
-const CACHE='wakad-circle-shopkeeper-v3';
-const SHELL=['/next-core.js','/next.css','/order-updates.js','/cash-collection.js','/shop-tools.js','/shopkeeper/','/shopkeeper/manifest.webmanifest','/shopkeeper/install.js','/style.css?v=4','/portal.css?v=5','/portal.js','/cloud-session.js','/firebase-config.js','/firebase.js','/payments-core.js','/payments-ui.js','/payments.css?v=1','/vendor/qrcode.js','/icons/icon-192.png','/icons/icon-512.png'];
+const CACHE='wakad-circle-shopkeeper-v4';
+const SHELL=['/device-state.js','/next-core.js','/next.css','/order-updates.js','/cash-collection.js','/shop-tools.js','/shopkeeper/','/shopkeeper/manifest.webmanifest','/shopkeeper/install.js','/style.css?v=4','/portal.css?v=5','/portal.js','/cloud-session.js','/firebase-config.js','/firebase.js','/payments-core.js','/payments-ui.js','/payments.css?v=1','/vendor/qrcode.js','/icons/icon-192.png','/icons/icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL))));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('wakad-circle-shopkeeper-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
 self.addEventListener('message',event=>{if(event.data==='SKIP_WAITING')self.skipWaiting()});

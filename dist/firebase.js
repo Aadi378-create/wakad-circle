@@ -20,9 +20,9 @@ if (config) {
       if(!window.WKCloud.user)throw Error('Sign in to enable order notifications.');if(ownerApp&&!window.WKCloud.owner)throw Error('Shopkeeper sign-in required.');
       if(!window.WC_PUSH_VAPID_KEY)throw Error('Order notifications are not configured yet.');
       const sdk=await import(base+'firebase-messaging.js');if(!await sdk.isSupported())throw Error('Notifications are unavailable in this browser. Try the installed app in Chrome or Safari.');
-      if(await Notification.requestPermission()!=='granted')throw Error('Allow notifications in browser settings to receive order updates.');
+      if(await window.WCDeviceState.bounded(Notification.requestPermission(),30000,'Notification permission is still waiting. Allow it in your browser, then try again.')!=='granted')throw Error('Allow notifications in browser settings to receive order updates.');
       const registration=await navigator.serviceWorker.getRegistration('/')||await navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'});if(!registration.active)await new Promise((resolve,reject)=>{const worker=registration.installing||registration.waiting;if(!worker)return reject(Error('App setup is still loading. Reopen it and try again.'));const timer=setTimeout(()=>reject(Error('App setup timed out. Reopen it and try again.')),30000);worker.addEventListener('statechange',()=>{if(worker.state==='activated'){clearTimeout(timer);resolve()}else if(worker.state==='redundant'){clearTimeout(timer);reject(Error('App setup needs an update. Reopen it and try again.'))}})});
-      const uid=window.WKCloud.user.uid,token=await sdk.getToken(sdk.getMessaging(app),{vapidKey:window.WC_PUSH_VAPID_KEY,serviceWorkerRegistration:registration});if(uid!==window.WKCloud.user?.uid)throw Error('Your account changed. Please sign in again.');await call(ownerApp?'registerOrderAlerts':'registerCustomerAlerts',{token});try{localStorage.setItem((ownerApp?'wc-alert-device-':'wc-customer-alert-device-')+uid,token)}catch{}return true;
+      const uid=window.WKCloud.user.uid,token=await window.WCDeviceState.bounded(sdk.getToken(sdk.getMessaging(app),{vapidKey:window.WC_PUSH_VAPID_KEY,serviceWorkerRegistration:registration}),20000,'Notification setup timed out. Check your connection and try again.');if(uid!==window.WKCloud.user?.uid)throw Error('Your account changed. Please sign in again.');await call(ownerApp?'registerOrderAlerts':'registerCustomerAlerts',{token});try{localStorage.setItem((ownerApp?'wc-alert-device-':'wc-customer-alert-device-')+uid,token)}catch{}return true;
     }
     window.WKCloud={
       user:null,owner:false,durableSession,restoring:true,refreshOrders:()=>channel.refresh(),
@@ -41,6 +41,7 @@ if (config) {
       cancelOrder: id=>call('cancelOrder',{id}),
       proposeOrderChange: data=>call('proposeOrderChange',data),
       respondOrderChange: data=>call('respondOrderChange',data),
+      notificationsEnabled:ownerApp=>window.WCDeviceState.notificationsEnabled(window.WKCloud,ownerApp),
       enableOrderAlerts:()=>enableNotifications(true),
       enableCustomerAlerts:()=>enableNotifications(false),
       saveProduct: product=>call('saveProduct',product),

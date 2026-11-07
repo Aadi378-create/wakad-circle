@@ -1,5 +1,7 @@
 # Wakad Circle application audit
 
+Latest follow-up: [7 November diagnostics and fixes](DIAGNOSTICS-2026-11-07.md). The results below describe the earlier release.
+
 Date: 7 November 2026 (India). Scope: customer and shopkeeper PWAs, shared authentication, Firestore rules, callable backend, payments, install/update caching, dependencies, repository and release configuration. This supersedes earlier audit notes in Git history. It is a code/security review with automated and browser verification, not an independent penetration-test certification or a scan of the entire PC.
 
 ## Result and fixes
