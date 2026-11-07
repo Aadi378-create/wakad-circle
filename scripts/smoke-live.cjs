@@ -10,9 +10,9 @@ async function main(){
   response=await fetch(root+'/orders',{signal:options.signal()});assert.equal(response.status,403,'anonymous order reads must be denied');
   response=await fetch(root+'/users/anonymous-test/addresses',{signal:options.signal()});assert.equal(response.status,403,'anonymous address reads must be denied');
   response=await fetch(root+'/paymentReceipts',{signal:options.signal()});assert.equal(response.status,403,'payment receipt records must stay private');
-  for(const name of ['saveProduct','placeOrder','seedCatalog','setOrderStatus','saveAddress','deleteAddress','submitPaymentReference','managePayment']){
+  for(const name of ['saveProduct','placeOrder','setOrderStatus','saveAddress','deleteAddress','submitPaymentReference','managePayment']){
     response=await fetch('https://asia-south1-wakad-kissan.cloudfunctions.net/'+name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:{}}),signal:options.signal()});assert.equal(response.status,401,name+' authentication boundary');assert.equal((await response.json()).error.status,'UNAUTHENTICATED');
   }
-  console.log(JSON.stringify({host,catalogProducts:count,securityHeaders:'passed',installAssets:'passed',privateOrders:'passed',privateAddresses:'passed',unauthenticatedWrites:'blocked on all eight functions'}));
+  console.log(JSON.stringify({host,catalogProducts:count,securityHeaders:'passed',installAssets:'passed',privateOrders:'passed',privateAddresses:'passed',unauthenticatedWrites:'blocked on all seven functions'}));
 }
 main().catch(err=>{console.error(err.message);process.exitCode=1});

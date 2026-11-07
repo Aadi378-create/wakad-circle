@@ -28,19 +28,19 @@ if (config) {
       submitPaymentReference: (id,reference)=>call('submitPaymentReference',{id,reference}),
       managePayment: data=>call('managePayment',data),
       saveAddress: address=>call('saveAddress',address),
-      deleteAddress: id=>call('deleteAddress',{id}),
-      seed: products=>call('seedCatalog',{products})
+      deleteAddress: id=>call('deleteAddress',{id})
+
     };
     dbSDK.onSnapshot(dbSDK.collection(db,'products'),snap=>window.WK.receiveProducts(snap.docs.map(d=>d.data())),err=>window.WK.cloudError(err));
     async function restoreSession(user){
-      const generation=++authGeneration;channel.stop();window.WKCloud.restoring=true;stopAddresses();window.WK.receiveOrders([]);window.WK.receiveAddresses?.([]);window.WKCloud.user=user;window.WKCloud.owner=false;
+      const generation=++authGeneration;const identityChanged=window.WKCloud.user?.uid!==user?.uid;window.WKCloud.user=user;if(identityChanged)window.WK.authReset?.();channel.stop();window.WKCloud.restoring=true;stopAddresses();window.WK.receiveOrders([]);window.WK.receiveAddresses?.([]);window.WKCloud.user=user;window.WKCloud.owner=false;
       let isOwner=false;
       if(user){try{const token=await user.getIdTokenResult();isOwner=token.claims.shopkeeper===true}catch(err){if(generation===authGeneration){window.WK.sessionError?.(err);window.WK.cloudError(err)}return}}
       if(generation!==authGeneration)return;
       window.WKCloud.owner=isOwner;window.WKCloud.restoring=false;
       window.WK.authChanged();
-      channel.start(user,isOwner);
-      if(user&&window.WK.receiveAddresses)stopAddresses=dbSDK.onSnapshot(dbSDK.collection(db,'users',user.uid,'addresses'),snap=>window.WK.receiveAddresses(snap.docs.map(d=>d.data())),err=>window.WK.cloudError(err));
+      channel.start(user,window.WK.appRole==='shopkeeper'&&isOwner);
+      if(user&&window.WK.receiveAddresses)stopAddresses=dbSDK.onSnapshot(dbSDK.collection(db,'users',user.uid,'addresses'),snap=>{if(generation===authGeneration&&window.WKCloud.user?.uid===user.uid)window.WK.receiveAddresses(snap.docs.map(d=>d.data()))},err=>{if(generation===authGeneration)window.WK.cloudError(err)});
       else if(!user)window.WK.receiveOrders([]);
     }
     authSDK.onIdTokenChanged(auth,restoreSession);

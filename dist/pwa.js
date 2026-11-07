@@ -1,6 +1,6 @@
 let installPrompt=null;
 const installButton=document.createElement('button');installButton.id='installapp';installButton.textContent='Install app';
-$('.demo-toolbar>div').prepend(installButton);
+$('.app-toolbar>div').prepend(installButton);
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;});
 installButton.onclick=async()=>{
   if(installPrompt){await installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;return;}
@@ -16,7 +16,7 @@ if('serviceWorker' in navigator){
   let refreshing=false,hadController=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange',()=>{if(hadController&&!refreshing){refreshing=true;location.reload()}});
   navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'}).then(registration=>{
-    function offerUpdate(){if(!registration.waiting)return;let button=$('#updateapp');if(button)return;button=document.createElement('button');button.id='updateapp';button.textContent='Update app';button.onclick=()=>registration.waiting?.postMessage('SKIP_WAITING');$('.demo-toolbar>div').prepend(button)}
+    function offerUpdate(){if(!registration.waiting)return;let button=$('#updateapp');if(button)return;button=document.createElement('button');button.id='updateapp';button.textContent='Update app';button.onclick=()=>registration.waiting?.postMessage('SKIP_WAITING');$('.app-toolbar>div').prepend(button)}
     offerUpdate();registration.addEventListener('updatefound',()=>{registration.installing?.addEventListener('statechange',()=>{if(registration.waiting&&navigator.serviceWorker.controller)offerUpdate()})});
     window.addEventListener('focus',()=>registration.update().catch(()=>{}));
   }).catch(()=>notify('Installable app setup is unavailable in this browser. You can continue using the website.'));

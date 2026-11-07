@@ -1,27 +1,33 @@
 # Wakad Circle
 
-India-focused kirana prototype for phones and laptops. Live storefront: https://wakad-circle.web.app/.
+Two connected installable apps for Wakad, Pune:
 
-Shared Firebase catalog, prices, stock, saved addresses, delivery/pickup orders and a separate shopkeeper portal. Pickup is always free with no minimum basket; customers select an arrival interval. Prices are in ₹, phone sign-in uses +91, and the database/backend use Mumbai. Shopkeeper access uses a server-issued custom claim. Free delivery begins at ₹499; below that delivery is ₹25. Current delivery PIN: 411057.
+- Customer shop: https://wakad-circle.web.app/
+- Shopkeeper app: https://wakad-circle.web.app/shopkeeper/
 
-Double-click `Start Demo.cmd` on this PC to open the presentation. Click **Start shopkeeper demo** for a five-step guided walkthrough. Presentation data is browser-local, requires no SMS, and sends no real orders. Free delivery begins at ₹499; below that the fee is ₹25.
+Both use the same live Firebase catalog, inventory and orders in Mumbai. The customer app has no owner portal, sample catalog or simulated payment controls. The shopkeeper app requires verified phone authentication and a server-issued role. Install each using Chrome/Edge's install menu or Safari's Add to Home Screen.
 
-## Firebase mode
+Delivery costs ₹25 and is free from a ₹499 item subtotal. Pickup is free with no minimum; customers select an arrival interval. Up to ten private addresses sync per account. Store acceptance and order progress update through Firestore listeners. Keep the owner app open for incoming alerts; closed-app push is not implemented.
 
-The Firebase project and web app display name is **Wakad Circle**. The CLI alias is `wakad-circle`; the immutable underlying project ID remains `wakad-kissan` to preserve existing accounts, addresses, orders and catalog data. Its public web configuration is in `dist/firebase-config.js`. The app opens in live mode; hosted URLs always use real data and real UPI requests; local sample mode is available only on localhost. Install the web app using the browser install menu or the Install app button. An internet connection is required for shared data and writes.
+Cash and real amount-prefilled UPI links/QRs are supported. Receipt confirmation and refunds require a bank check by the shopkeeper. The app cannot transfer, refund or automatically verify money. No payment gateway surcharge is added; bank and Firebase terms still apply.
 
-The code includes Phone OTP with reCAPTCHA, resend cooldown, error handling and sign-out; realtime Firestore reads; and callable backend functions for price changes, product creation, stock deduction and order management. Firebase rules prohibit direct client writes. Orders use server catalog prices and an atomic stock transaction; a request ID prevents duplicate checkout submissions.
+## Development and verification
 
-## Develop, test and deploy
+Use Node 22 and Java 21:
 
-Use Node 22. Run `npm ci --prefix functions --ignore-scripts`, `npm run check`, `npm test`, and `npm run audit:dependencies`. Run `npm start` to serve locally at http://localhost:4173/. After checks pass, sign in through the official Firebase CLI and deploy with `npx firebase-tools deploy --project wakad-circle`.
+~~~powershell
+npm ci --ignore-scripts
+npm ci --prefix functions --ignore-scripts
+npm run check
+npm test
+npm run audit:all
+npx --yes firebase-tools@15.35.0 emulators:exec --only firestore --project demo-wakad-circle-audit --config firebase.audit.json "npm run test:integration"
+~~~
 
-Catalog edits in the Shopkeeper portal sync through Firebase without a code release or app-store update. GitHub CI runs checks on pushes; no deployment credential is stored in GitHub. An authorized project administrator assigns the `shopkeeper: true` custom claim using the Admin SDK scripts; customers cannot self-assign it.
+The CLI's demo- prefix identifies an isolated emulator-only project, not an application mode. Integration tests refuse to run outside the configured emulator. npm start serves the live-data frontend at loopback port 4173. Production callables reject unlisted local origins.
 
-Read [operations](docs/OPERATIONS.md), [hosting and cost estimate](docs/HOSTING-AND-COSTS.md), [Play release readiness](docs/PLAY-RELEASE.md), and [audit report](docs/AUDIT-REPORT.md).
+After checks, an authorized administrator deploys using npx --yes firebase-tools@15.35.0 deploy --project wakad-circle. GitHub checks run on pushes; no deployment credential is stored in GitHub.
 
-Never commit Admin credentials, CLI authorization codes, OTPs, or Android signing keys. The older ChatGPT Sites deployment remains owner-private; Firebase Hosting provides ordinary phone/laptop access. The installable web app is not a Google Play release. Checkout uses cash on delivery; there is no payment gateway.
+The immutable cloud project ID remains wakad-kissan to preserve existing accounts/data. Public branding and the canonical host use Wakad Circle. The old host redirects; the older Sites mirror stays owner-private.
 
-Shopkeeper portal: https://wakad-circle.web.app/shopkeeper/. New orders wait for availability confirmation; keep the portal open for alerts and enable sound if wanted. Customers can track status under My orders. See operations for the security controls and remaining rollout work.
-
-Install the separate **Wakad Circle Shopkeeper** app from `/shopkeeper/`. It retains the same saved Firebase sign-in, automatically refreshes orders on resume, and offers real UPI amount collection. Browser storage must be enabled. See operations for session, connectivity and payment verification limits.
+Read [operations](docs/OPERATIONS.md), [hosting costs](docs/HOSTING-AND-COSTS.md) and the [audit report](docs/AUDIT-REPORT.md). Never commit Admin keys, CLI tokens, OTPs or signing credentials.

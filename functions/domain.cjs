@@ -1,7 +1,7 @@
 function validateProduct(p){
-  if(!p||!Number.isSafeInteger(p.id)||p.id<1||typeof p.name!=='string'||!p.name.trim()||p.name.length>100||typeof p.unit!=='string'||!p.unit.trim()||p.unit.length>30||!Number.isInteger(p.cat)||p.cat<0||p.cat>5||!Number.isFinite(p.price)||p.price<=0||p.price>100000||!Number.isInteger(p.stock)||p.stock<0||p.stock>100000)throw Error('Enter a valid product, price and stock.');
+  if(!p||!Number.isSafeInteger(p.id)||p.id<1||typeof p.name!=='string'||!p.name.trim()||p.name.length>100||typeof p.unit!=='string'||!p.unit.trim()||p.unit.length>30||!Number.isInteger(p.cat)||p.cat<0||p.cat>5||!Number.isFinite(p.price)||p.price<.01||p.price>100000||Math.abs(p.price*100-Math.round(p.price*100))>.00001||!Number.isInteger(p.stock)||p.stock<0||p.stock>100000)throw Error('Enter a valid product, price and stock.');
   const rawMrp=p.mrp===undefined?p.price:p.mrp;
-  if(!Number.isFinite(rawMrp)||rawMrp<=0||rawMrp>100000)throw Error('Enter a valid MRP.');
+  if(!Number.isFinite(rawMrp)||rawMrp<.01||rawMrp>100000||Math.abs(rawMrp*100-Math.round(rawMrp*100))>.00001)throw Error('Enter a valid MRP.');
   const clean={id:p.id,name:p.name.trim(),unit:p.unit.trim(),cat:p.cat,price:Math.round(p.price*100)/100,mrp:Math.round(Math.max(rawMrp,p.price)*100)/100,stock:p.stock,emoji:['🥬','🥛','🌾','🍿','🧃','🧴'][p.cat]};
   if(typeof p.pack==='string'&&p.pack.length<50)clean.pack=p.pack;
   if(typeof p.sub==='string'&&p.sub.length<50)clean.sub=p.sub;
@@ -58,4 +58,6 @@ function nextProductRevision(current,expected){
   if(!Number.isSafeInteger(expected)||expected<0||expected!==(current?.revision||0))throw Error('Stock or price changed on another device. Refresh and save again.');
   return expected+1;
 }
-module.exports={validateProduct,quote,deliveryDetails,fulfillmentDetails,validateAddress,canonicalStatus,orderTransition,nextOrderRate,nextProductRevision};
+function validateCheckoutTotal(expected,bill){if(!Number.isFinite(expected)||expected<0||Math.abs(expected*100-Math.round(expected*100))>.00001||Math.round(expected*100)!==Math.round(bill.total*100))throw Error('Prices, stock or delivery changed. Review your basket total and try again.');return true}
+function nextAddressRate(previous,now){const current=previous&&now-previous.windowStart<60000?previous:{windowStart:now,count:0};if(current.count>=20)throw Error('Too many address changes. Please wait a minute.');return {windowStart:current.windowStart,count:current.count+1}}
+module.exports={validateCheckoutTotal,nextAddressRate,validateProduct,quote,deliveryDetails,fulfillmentDetails,validateAddress,canonicalStatus,orderTransition,nextOrderRate,nextProductRevision};

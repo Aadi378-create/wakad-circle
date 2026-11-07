@@ -1,4 +1,4 @@
-const CACHE='wakad-circle-shopkeeper-v1';
+const CACHE='wakad-circle-shopkeeper-v2';
 const SHELL=['/shopkeeper/','/shopkeeper/manifest.webmanifest','/shopkeeper/install.js','/style.css?v=4','/portal.css?v=5','/portal.js','/cloud-session.js','/firebase-config.js','/firebase.js','/payments-core.js','/payments-ui.js','/payments.css?v=1','/vendor/qrcode.js','/icons/icon-192.png','/icons/icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL))));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('wakad-circle-shopkeeper-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));

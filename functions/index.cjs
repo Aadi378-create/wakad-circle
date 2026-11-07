@@ -1,14 +1,13 @@
 const {onCall,HttpsError}=require('firebase-functions/v2/https');
 const {initializeApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
-const {validateProduct,quote,fulfillmentDetails,validateAddress,orderTransition,nextOrderRate,nextProductRevision}=require('./domain.cjs');
+const {validateCheckoutTotal,nextAddressRate,validateProduct,quote,fulfillmentDetails,validateAddress,orderTransition,nextOrderRate,nextProductRevision}=require('./domain.cjs');
 const payment=require('./payments.cjs'),{randomBytes}=require('node:crypto');
 initializeApp();const db=getFirestore(),options={region:'asia-south1',maxInstances:5,invoker:'public',cors:['https://wakad-circle.web.app','https://wakad-circle.firebaseapp.com','https://wakad-kissan.web.app','https://wakad-kissan.firebaseapp.com','https://wakad-kissan-kirana.peakedbeam2.chatgpt.site']};
 function signedIn(request){if(!request.auth||!request.auth.token.phone_number)throw new HttpsError('unauthenticated','Sign in with your phone number first.');}
 function owner(request){signedIn(request);if(request.auth.token.shopkeeper!==true)throw new HttpsError('permission-denied','Only the shopkeeper can make this change.');}
 function validate(fn){try{return fn()}catch(e){throw new HttpsError('invalid-argument',e.message)}}
 exports.saveProduct=onCall(options,async request=>{owner(request);const p=validate(()=>validateProduct(request.data)),ref=db.collection('products').doc(String(p.id));await db.runTransaction(async tx=>{const current=await tx.get(ref);let revision;try{revision=nextProductRevision(current.exists?current.data():null,request.data.revision??0)}catch(err){throw new HttpsError('failed-precondition',err.message)}tx.set(ref,{...p,revision});});return {ok:true};});
-exports.seedCatalog=onCall(options,async request=>{owner(request);if(!Array.isArray(request.data?.products)||!request.data.products.length||request.data.products.length>50)throw new HttpsError('invalid-argument','Invalid catalog.');const ps=validate(()=>request.data.products.map(validateProduct));await db.runTransaction(async tx=>{const snap=await tx.get(db.collection('products').limit(1));if(!snap.empty)throw new HttpsError('already-exists','Catalog already has products.');ps.forEach(p=>tx.set(db.collection('products').doc(String(p.id)),p));});return {ok:true};});
 exports.placeOrder=onCall(options,async request=>{
   signedIn(request);const details=validate(()=>fulfillmentDetails(request.data));
   const key=request.data.requestId;if(typeof key!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(key))throw new HttpsError('invalid-argument','Invalid checkout request.');
@@ -21,8 +20,9 @@ exports.placeOrder=onCall(options,async request=>{
     const refs=lines.map(l=>db.collection('products').doc(String(l.id)));
     const docs=await tx.getAll(...refs);const catalog=new Map(docs.filter(d=>d.exists).map(d=>[d.data().id,d.data()]));
     const bill=validate(()=>quote(lines,catalog,details.fulfillment));
-    bill.items.forEach(i=>tx.update(db.collection('products').doc(String(i.id)),{stock:catalog.get(i.id).stock-i.qty,revision:(catalog.get(i.id).revision||0)+1}));
+    try{validateCheckoutTotal(request.data.expectedTotal,bill)}catch(e){throw new HttpsError('failed-precondition',e.message)}
     const paymentDetails=validate(()=>payment.choice(request.data,bill.total));
+    bill.items.forEach(i=>tx.update(db.collection('products').doc(String(i.id)),{stock:catalog.get(i.id).stock-i.qty,revision:(catalog.get(i.id).revision||0)+1}));
     const order={...details,...bill,...paymentDetails,paymentRef:'WC'+randomBytes(8).toString('hex'),uid:request.auth.uid,phone:request.auth.token.phone_number,status:'Pending confirmation',stockReleased:false,date:new Date().toISOString(),createdAt:FieldValue.serverTimestamp()};
     tx.set(rateRef,rate);
     tx.set(orderRef,order);return {id:orderRef.id,total:order.total,status:order.status};
@@ -47,9 +47,9 @@ exports.setOrderStatus=onCall(options,async request=>{
 });
 exports.saveAddress=onCall(options,async request=>{
   signedIn(request);const address=validate(()=>validateAddress(request.data)),collection=db.collection('users').doc(request.auth.uid).collection('addresses');
-  await db.runTransaction(async tx=>{const snap=await tx.get(collection);if(snap.size>=10&&!snap.docs.some(d=>d.id===address.id))throw new HttpsError('resource-exhausted','You can save up to 10 addresses.');tx.set(collection.doc(address.id),{...address,updatedAt:FieldValue.serverTimestamp()})});return {ok:true};
+  await db.runTransaction(async tx=>{const rateRef=db.collection('addressLimits').doc(request.auth.uid),rateSnapshot=await tx.get(rateRef);let rate;try{rate=nextAddressRate(rateSnapshot.exists?rateSnapshot.data():null,Date.now())}catch(e){throw new HttpsError('resource-exhausted',e.message)}const snap=await tx.get(collection);if(snap.size>=10&&!snap.docs.some(d=>d.id===address.id))throw new HttpsError('resource-exhausted','You can save up to 10 addresses.');tx.set(rateRef,rate);tx.set(collection.doc(address.id),{...address,updatedAt:FieldValue.serverTimestamp()})});return {ok:true};
 });
-exports.deleteAddress=onCall(options,async request=>{signedIn(request);const id=request.data?.id;if(typeof id!=='string'||!/^[a-zA-Z0-9-]{1,80}$/.test(id))throw new HttpsError('invalid-argument','Invalid address.');await db.collection('users').doc(request.auth.uid).collection('addresses').doc(id).delete();return {ok:true};});
+exports.deleteAddress=onCall(options,async request=>{signedIn(request);const id=request.data?.id;if(typeof id!=='string'||!/^[a-zA-Z0-9-]{1,80}$/.test(id))throw new HttpsError('invalid-argument','Invalid address.');await db.runTransaction(async tx=>{const rateRef=db.collection('addressLimits').doc(request.auth.uid),snap=await tx.get(rateRef);let rate;try{rate=nextAddressRate(snap.exists?snap.data():null,Date.now())}catch(e){throw new HttpsError('resource-exhausted',e.message)}tx.set(rateRef,rate);tx.delete(db.collection('users').doc(request.auth.uid).collection('addresses').doc(id))});return {ok:true};});
 
 function orderId(data){const id=data?.id;if(typeof id!=='string'||!id||id.length>250||id.includes('/'))throw new HttpsError('invalid-argument','Invalid order.');return id}
 exports.submitPaymentReference=onCall(options,async request=>{

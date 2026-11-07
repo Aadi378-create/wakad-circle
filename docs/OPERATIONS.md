@@ -1,90 +1,51 @@
-# Running the shop
+# Operating Wakad Circle
 
-## Phone and laptop
+## The two apps
 
-The public Firebase Hosting storefront is https://wakad-circle.web.app/. It uses the same Firestore catalog and orders on every device. Each device signs in separately using the registered phone number. Browser sessions remain signed in until sign-out or browser data removal.
+Customers use https://wakad-circle.web.app/. Owners use https://wakad-circle.web.app/shopkeeper/. Each has a separate installable identity and scoped service worker. Both share one Firebase project and browser authentication session. There is no portal entry in the customer interface. Knowing the owner URL grants no privileges: the server requires verified phone authentication and a shopkeeper custom claim.
 
-On Android Chrome or desktop Chrome/Edge, use **Install app** or the browser's install menu. On iPhone, use Safari → Share → Add to Home Screen. This is an installable web app, not a Play Store release. Keep an internet connection for current stock, checkout and administrative writes. The service worker caches the interface only; orders and phone-auth API responses are not cached.
+Install using Chrome/Edge's install menu or Safari → Share → Add to Home Screen. Old-domain installations must be reinstalled from the new origin. Open/reload installed apps to receive interface updates. Catalog updates sync without a code release.
 
-## Catalog changes
+No presentation modes, sample orders or simulated payment paths remain. Old mode query parameters are discarded. Local preview also uses real Firebase data.
 
-1. Sign in with the approved shopkeeper number.
-2. Open **Shopkeeper portal → Inventory & prices**.
-3. Change price or stock, then Save. Use Add product for a new pack size/product.
-4. Open the storefront on another device to see the shared update.
+## Sign-in and connectivity
 
-Catalog edits are database records and require no code release or app-store update. Editing source code requires tests and a deployment. The prototype uses cash on delivery, serves PIN 411057, and offers free delivery from ₹499; below ₹499 delivery is ₹25.
+Firebase uses durable IndexedDB persistence with local-storage fallback and automatic token refresh. There is no inactivity logout. Clearing browser storage, private browsing, sign-out or server revocation can require another OTP. Devices/browser profiles maintain separate sessions.
 
-## Deploying changes
+Only the owner app subscribes to the whole-shop inbox. Customer queries remain UID-scoped even for owner accounts. Account changes clear private views and discard stale callbacks.
 
-Use Node 22, sign in through the official Firebase CLI, and run:
+Firestore listeners deliver order changes. Cached data is labelled reconnecting. Resume/reconnect requests a deduplicated server refresh, with a bounded initial server check and manual Refresh orders control. All orders is the default filter. Keep the owner app open and connected for popups; enable sound with a user gesture. Mobile operating systems can suspend background apps. Closed-app push is not implemented.
 
-```powershell
-npm ci --prefix functions --ignore-scripts
-npm run check
-npm test
-npm run audit:dependencies
-npx firebase-tools deploy --project wakad-circle
-```
+Service workers cache the interface, not order/address/auth API responses. Current stock, ordering and writes require internet access.
 
-Firestore rules deny direct client writes. Server functions require phone authentication; catalog and order-status writes require a `shopkeeper: true` custom claim. Do not grant this claim to customers. Changing the approved shopkeeper should be performed by a project administrator using the Admin SDK scripts, never by a client-provided flag.
+## Catalog and orders
 
-The workflow in `.github/workflows/checks.yml` runs checks on each push. Deployment is manual; no long-lived deployment secret has been added to GitHub. A future automatic release should use workload identity federation, scoped to this Firebase project.
+Use Inventory & prices in the owner app. Product revision checks reject stale edits. Prices must be at least ₹0.01 with two decimal places.
 
-## Hosting boundaries
+Delivery to PIN 411057 costs ₹25, waived at ₹499 item subtotal. Pickup is free with no minimum. Arrival choices are 15, 30, 45, 60, 90 or 120 minutes. The configured pickup address is Wakad, Pune · 411057; add the exact address before advertising directions.
 
-The older Sites deployment remains owner-private in ChatGPT. Firebase Hosting is the device-friendly public storefront. Its public web API configuration is an identifier, not an administrative credential. Customer address, phone, and order documents require account-scoped access. Never upload Firebase Admin keys, CLI tokens, OTPs, or Android signing keys into the repository.
+Addresses are private per account, up to ten. Saves and deletes share a twenty-per-minute server limit. Orders use server prices and atomic stock reservations. Request IDs prevent duplicate checkout. A changed total requires customer review. Saved orders retain their agreed price after catalog edits.
 
-## Wakad Circle: addresses, pickup and order confirmation
+Check availability before accepting Pending confirmation orders. Accepted → Preparing → Ready for pickup / Out for delivery → Completed. Rejecting releases reserved stock once. Customers track status under My orders. Five successful order submissions per account per minute are allowed.
 
-The customer app supports up to 10 saved addresses per signed-in account. Entries sync privately through Firebase; the selected address is remembered per device. Delivery serves PIN 411057 and costs **₹25**, waived at an item subtotal of **₹499**. Store pickup has **no delivery fee and no minimum order**. Customers choose an arrival interval of 15, 30, 45, 60, 90 or 120 minutes. The pickup address is configured in `dist/firebase-config.js`; currently it is the generic Wakad, Pune · 411057, pending the shop's exact address.
+## Real UPI payments
 
-Open https://wakad-circle.web.app/shopkeeper.html and sign in with the approved shopkeeper phone. Keep this portal open to receive incoming-order popups; choose **Enable sound** for an audible alert. Closed-app push notifications are not implemented. Check every item, then accept or reject with a reason. Pending orders reserve inventory; rejection restores it once. Accepted orders move to Preparing, then Ready for pickup or Out for delivery, then Completed. Customers follow progress under the account icon → My orders.
+The configured public recipient is the owner-supplied Axis Bank VPA with payee name Aadi Jain. Ownership and merchant onboarding have not been independently verified. No bank PIN/password or secret payment credential is stored.
 
-Use Inventory & prices in this separate portal to update the catalog. `/shopkeeper.html?mode=demo` uses local sample data only. Live portal access and every administrative write require a server-issued shopkeeper claim, even if someone knows the portal URL.
+Accepted UPI orders offer a QR and app link containing the server-recorded amount, recipient, INR and opaque payment reference. Collect UPI in the owner app creates real counter requests for ₹1–₹1,00,000 without creating online orders. Some UPI apps permit amount edits or restrict generic web intents; validate using the actual phones.
 
-## Security boundary
+Customer twelve-digit reference submissions remain Verification pending. Check the bank statement and exact received amount before marking Paid. Customer callbacks/screenshots cannot mark an order paid. A bank reference cannot be applied to two different orders. Three distinct customer reference attempts are permitted.
 
-Firebase manages HTTPS hosting and cloud infrastructure. The app enforces private address/order reads, verified-phone writes, server-only pricing/stock calculations, valid status transitions, idempotent checkout and five accepted order submissions per account per minute. Callable CORS allows only the three app hosting origins; CORS is a browser constraint, not a substitute for authentication. No file-upload or executable-download feature is present.
+Paid rejected orders become Refund required. Refund externally through the bank first, then record the completed refund reference and exact amount. This app does not move/refund money, automatically verify settlement, or process cards. No app gateway surcharge is added; bank terms and Firebase usage charges apply.
 
-A restrictive Content Security Policy blocks inline scripts/event attributes, plugins and framing; only the app and the required Google/Firebase dependencies can load scripts. Style attributes remain allowed for existing dynamic product art. HTTPS/HSTS, nosniff and disabled camera/microphone/location permissions are applied. Dependencies and committed source are scanned before release.
+## Release and security
 
-This is application hardening, not a custom network firewall/WAF or an antivirus guarantee. Firebase App Check enforcement, external WAF/Cloud Armor, project-wide billing alerts and closed-app push alerts are not enabled. App Check should be registered and monitored before enforcement so legitimate installed clients are not locked out. Phone OTP uses Firebase reCAPTCHA and India-only SMS configuration; SMS spending is not hard-capped by the client cooldown. Keep account 2-step verification and dependencies current. Physical-phone acceptance and an independent penetration test remain separate verification work.
+Run all README checks. Integration tests use an isolated emulator and no production transactions. Deploy functions, rules and Hosting together when the checkout contract changes.
 
-## Brand and domain migration
+Firestore rules deny all client writes. Callables enforce phone authentication, roles, validation, server pricing, inventory transactions, status transitions and rate limits. Public catalog prices/stock are intentionally readable. Only project administrators can assign owner claims using scripts/set-shopkeeper.cjs.
 
-Canonical customer URL: https://wakad-circle.web.app/. Shopkeeper URL: https://wakad-circle.web.app/shopkeeper.html. GitHub: https://github.com/Aadi378-create/wakad-circle (private).
+Hosting uses CSP, HTTPS/HSTS, nosniff, anti-framing and restricted browser permissions. CORS is supplementary to authentication. No file-upload/executable feature exists. Never publish Admin keys, CLI tokens, OTPs or signing keys.
 
-Firebase project/web-app display names, installed-app manifest/icons, launcher, package names and Sites display title use Wakad Circle. The new Hosting site shares the existing Firebase data and authenticated roles. Its two Firebase-provided domains are authorized for phone authentication and allowed by callable CORS/CSP.
+App Check enforcement, an external WAF/Cloud Armor, project-wide spending alerts and background push are not configured. Client OTP cooldown is not a hard SMS spending cap. Keep account 2SV, dependency checks and monitoring active. Physical-phone acceptance and independent penetration testing remain separate rollout work.
 
-The former public Hosting site is retained only for permanent path-preserving redirects. The cloud project ID, storage bucket and function endpoint resource names are immutable infrastructure identifiers and remain unchanged. The old Sites private preview URL is also fixed by its provider; its display title/content is Wakad Circle. No duplicate database or new billing project was created.
-
-Install the PWA from the new canonical URL and remove the old home-screen installation/shortcut. Browser login and local basket data are origin-specific, so sign in again on the new domain; saved Firebase addresses and orders remain attached to the same verified phone account. Existing installed apps cannot silently change their web origin. Old published source/history and migration/redirect references naturally contain the earlier resource names.
-
-## Direct UPI and amount-filled QR collection
-
-The owner supplied the recipient VPA, payee name and Axis Bank details. The uploaded QR was decoded locally and its recipient matches the configured VPA. No bank account ownership or merchant onboarding was independently verified. The recipient is deliberately public in the payment UI and `dist/payments-core.js`; no bank password, PIN or secret API credential is stored.
-
-Customer checkout offers cash or UPI. For UPI orders, payment opens from **My orders** after the shop accepts availability. The QR and **Open UPI app** button contain the server-recorded order total including the delivery fee, INR, recipient and an opaque order payment reference. Amounts retain two decimal places. **₹ Collect UPI** in the shopkeeper portal also generates a QR for a manually entered counter-sale amount, from ₹1 to ₹1,00,000. Counter collections are not online order records.
-
-These are amount-prefilled UPI links, not bank-issued cryptographically locked payment requests. Some UPI apps may allow edits or restrict generic web links; test with the shop's actual phone/app before relying on this in-store. Do not use the demo QR for transfers: demo mode intentionally encodes non-payment text and disables the app-launch button. The uploaded static QR had no amount; app-generated QRs add the amount rather than altering that image.
-
-There is no paid gateway integration, gateway subscription or platform transaction surcharge added by the app. Axis/UPI account, merchant/payment-type terms and existing Firebase usage charges remain applicable. No general zero-bank-fee guarantee is made. See Axis Bank's current UPI and merchant acquiring terms.
-
-A customer submits a 12-digit UTR/RRN as a claim; this remains **Verification pending**. The shopkeeper must check the real bank statement, type the amount received, and confirm it matches the full order total. Screenshots, redirect callbacks and a customer reference cannot mark an order paid. Only the shopkeeper callable can record a verified receipt. A bank reference cannot be recorded against two different orders. A customer can submit at most three distinct reference attempts before contacting the store.
-
-If a paid order is rejected, its payment becomes **Refund required**. Refund externally in the bank first, then use **All orders → Record completed refund** with the refund reference and exact amount. This app does not move or refund money automatically. A late payment on an already rejected order can be recorded by the shopkeeper and likewise needs a refund. No cards, automatic settlement confirmation, webhook or gateway refunds are implemented.
-
-## Finding a real order
-
-Open `/shopkeeper.html` without `?mode=demo` and sign in with the approved shopkeeper phone. The app's demo workspace uses browser-local sample orders; it cannot receive orders from another phone. A persistent yellow demo banner now explains this and links to the live portal. An unsigned-in or not-yet-connected inbox shows an unknown count rather than a confirmed zero. The live badge/empty state is shown only after Firestore responds; failures produce a persistent error notice and retry control. Use All orders if the order was already accepted or completed.
-
-## Production shopkeeper app and session update — 7 November 2026
-
-The separately installable **Wakad Circle Shopkeeper** app starts at https://wakad-circle.web.app/shopkeeper/. It has a different manifest ID, a `/shopkeeper/` scope, its own install/update button and scoped service worker. `/shopkeeper.html` redirects to it. The existing customer PWA remains at `/`. The same-origin design preserves the current Firebase sign-in; no new auth project or merchant account was created. Install the owner app from Chrome's install menu, or Safari Share → Add to Home Screen. Keep it open and connected for live order alerts; this does not add background push notifications.
-
-Sign-in explicitly uses durable IndexedDB persistence with local-storage fallback. Firebase refreshes auth tokens; the app no longer forces a token network refresh on every page load. Session restoration shows a restoring state instead of briefly showing a signed-out welcome screen. There is no app inactivity logout. Signing out, clearing/denying browser storage, private browsing or server-side account/session revocation can still require a new sign-in. Browser profiles and devices keep separate sessions.
-
-Live listeners continue to deliver order changes. Cached snapshots are labelled reconnecting rather than live. Returning to the app or regaining a connection requests a deduplicated server refresh; a **Refresh orders** button and last-server-check time make this visible. An initial listener that has not confirmed server data gets a bounded one-shot server check after eight seconds. There is no continuous high-frequency polling loop. Owner inboxes now default to **All orders**, so already accepted orders are visible immediately after reopening. Prior demo/sign-in issues did not establish a measured Firestore propagation delay.
-
-**This supersedes all earlier hosted demo instructions.** Every hosted URL, including old `?mode=demo` links and the private Sites mirror, now uses real Firebase data and real UPI payment requests. The Demo menu is removed from production. Isolated sample mode remains available only on local loopback development servers. **₹ Collect UPI** produces an actual amount-prefilled `upi://pay` link/QR in the signed-in production app. It does not execute a transfer; authorisation happens in the customer's bank app. Receipt confirmation and refunds remain manual bank-verified records. No gateway fee is added by the app; bank terms and existing Firebase usage still apply.
+The Firebase storefront is public; account data stays protected by rules. The Sites mirror is owner-private. Immutable old cloud identifiers preserve existing accounts/data without duplicating the billing project.

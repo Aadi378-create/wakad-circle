@@ -5,12 +5,21 @@
   "description": "Phone and laptop kirana prototype with Firebase Authentication, Firestore and Cloud Functions",
   "scripts": {
     "start": "node server.cjs",
-    "test": "node --test functions/domain.test.cjs functions/auth.test.cjs functions/workflow.test.cjs functions/payments.test.cjs tests/static.test.cjs tests/server.test.cjs tests/cloud-session.test.cjs",
+    "test": "node --test functions/domain.test.cjs functions/auth.test.cjs functions/workflow.test.cjs functions/payments.test.cjs tests/static.test.cjs tests/server.test.cjs tests/cloud-session.test.cjs tests/production-clean.test.cjs",
     "check": "node scripts/check-syntax.cjs",
     "audit:dependencies": "npm --prefix functions audit --omit=dev",
-    "deploy:firebase": "firebase deploy --project wakad-circle"
+    "deploy:firebase": "firebase deploy --project wakad-circle",
+    "test:integration": "node --test tests/rules.integration.cjs tests/flows.integration.cjs",
+    "audit:all": "npm audit && npm --prefix functions audit"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
+    "firebase": "13.2.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "1.13.6"
   }
 }

@@ -9,7 +9,7 @@ const renderBeforeOffers=render;
 render=function(){renderBeforeOffers();renderOffers()};
 document.addEventListener('click',event=>{
   const offer=event.target.closest('[data-offer]');if(!offer)return;
-  if(admin)toggleAdmin();category='All';filter=offer.dataset.offer==='deals'?'deals':'all';
+  category='All';filter=offer.dataset.offer==='deals'?'deals':'all';
   const product=offer.dataset.offer==='product'?products.find(p=>p.id===Number(offer.dataset.product)):null;
   $('#search').value=product?.name||'';
   $$('[data-filter]').forEach(button=>button.classList.toggle('selected',button.dataset.filter===filter));
